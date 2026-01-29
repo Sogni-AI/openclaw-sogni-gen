@@ -11,7 +11,7 @@ metadata:
     install:
       - id: npm
         kind: exec
-        command: "cd {{skillDir}} && npm install"
+        command: "cd {{skillDir}} && npm i"
         label: "Install dependencies"
 ---
 
@@ -32,10 +32,18 @@ EOF
 chmod 600 ~/.config/sogni/credentials
 ```
 
-3. **Install dependencies:**
+3. **Install dependencies (if cloned):**
 ```bash
 cd /path/to/sogni-gen
-npm install
+npm i
+```
+
+4. **Or install from npm (no git clone):**
+```bash
+mkdir -p ~/.clawdbot/skills
+cd ~/.clawdbot/skills
+npm i sogni-gen
+ln -sfn node_modules/sogni-gen sogni-gen
 ```
 
 ## Usage (Images & Video)

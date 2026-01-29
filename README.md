@@ -19,6 +19,14 @@ cd ~/.clawdbot/skills/sogni-gen
 npm install
 ```
 
+```bash
+# Or install from npm (no git clone)
+mkdir -p ~/.clawdbot/skills
+cd ~/.clawdbot/skills
+npm i sogni-gen
+ln -sfn node_modules/sogni-gen sogni-gen
+```
+
 ### Standalone
 
 ```bash
