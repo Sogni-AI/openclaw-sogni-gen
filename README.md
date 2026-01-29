@@ -1,4 +1,8 @@
-# sogni-gen
+<p align="center">
+  <img src="screenshot.jpg" alt="Telegram image render workflow" width="320" />
+</p>
+
+# Image & Video gen for 🦞 Moltbot
 
 🎨 Generate **images and videos** using [Sogni AI](https://sogni.ai)'s decentralized GPU network.
 
