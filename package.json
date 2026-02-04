@@ -8,7 +8,8 @@
     "sogni-gen": "sogni-gen.mjs"
   },
   "scripts": {
-    "test": "node sogni-gen.mjs --help"
+    "test": "node --test test/*.test.mjs test/*.integration.mjs",
+    "test:integration": "node --test test/*.integration.mjs"
   },
   "keywords": [
     "sogni",
@@ -19,6 +20,9 @@
   ],
   "author": "Mauvis Ledford",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.22.0"
+  },
   "dependencies": {
     "@sogni-ai/sogni-client-wrapper": "^1.4.2",
     "json5": "^2.2.3"

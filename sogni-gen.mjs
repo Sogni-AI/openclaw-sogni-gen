@@ -14,6 +14,7 @@ import { homedir, tmpdir } from 'os';
 
 const LAST_RENDER_PATH = join(homedir(), '.config', 'sogni', 'last-render.json');
 const OPENCLAW_CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || join(homedir(), '.openclaw', 'openclaw.json');
+const IS_OPENCLAW_INVOCATION = Boolean(process.env.OPENCLAW_PLUGIN_CONFIG);
 const VIDEO_WORKFLOW_DEFAULT_MODELS = {
   't2v': 'wan_v2.2-14b-fp8_t2v_lightx2v',
   'i2v': 'wan_v2.2-14b-fp8_i2v_lightx2v',
@@ -121,6 +122,40 @@ function getModelDefaults(modelId, config) {
   const entry = config.modelDefaults[modelId];
   if (!entry || typeof entry !== 'object') return null;
   return entry;
+}
+
+function formatTokenValue(value) {
+  if (!Number.isFinite(value)) return 'unknown';
+  return value.toFixed(2);
+}
+
+function inferDefaultVideoSteps(modelId) {
+  const id = (modelId || '').toLowerCase();
+  if (id.includes('lightx2v')) return 4;
+  if (id.includes('lightning') || id.includes('turbo') || id.includes('lcm')) return 4;
+  return 20;
+}
+
+function resolveVideoSteps(modelId, modelDefaults, explicitSteps) {
+  if (Number.isFinite(explicitSteps)) return explicitSteps;
+  if (Number.isFinite(modelDefaults?.steps)) return modelDefaults.steps;
+  return inferDefaultVideoSteps(modelId);
+}
+
+function parseCostEstimate(estimate, tokenType) {
+  if (!estimate) return null;
+  const raw = tokenType === 'sogni'
+    ? estimate.sogni ?? estimate.token
+    : estimate.spark ?? estimate.token;
+  const value = Number.parseFloat(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function buildBalanceError(message, details) {
+  const err = new Error(message);
+  err.code = 'INSUFFICIENT_BALANCE';
+  err.details = details || null;
+  return err;
 }
 
 const MULTI_ANGLE_AZIMUTHS = [
@@ -1339,7 +1374,62 @@ async function runMultiAngleFlow(client, log) {
   }
 }
 
+async function ensureSufficientVideoBalance(client, log) {
+  if (!options.video || options.estimateVideoCost) return;
+  const tokenType = options.tokenType || 'spark';
+  const tokenLabel = tokenType.toUpperCase();
+  let balance;
+  try {
+    balance = await client.getBalance();
+  } catch (err) {
+    if (!options.quiet) {
+      log(`Warning: Could not fetch balance (${err?.message || 'error'})`);
+    }
+    return;
+  }
+  const available = tokenType === 'sogni' ? balance.sogni : balance.spark;
+  if (!Number.isFinite(available)) return;
+  if (available <= 0) {
+    throw buildBalanceError(
+      `Insufficient ${tokenLabel} balance (have ${formatTokenValue(available)}).`,
+      { tokenType, available }
+    );
+  }
+
+  const modelDefaults = getModelDefaults(options.model, openclawConfig);
+  const steps = resolveVideoSteps(options.model, modelDefaults, options.steps);
+  if (!Number.isFinite(steps) || steps <= 0) return;
+
+  let estimate;
+  try {
+    estimate = await client.estimateVideoCost({
+      modelId: options.model,
+      width: options.width,
+      height: options.height,
+      fps: options.fps,
+      steps,
+      numberOfMedia: options.count,
+      tokenType,
+      ...(options.frames ? { frames: options.frames } : { duration: options.duration })
+    });
+  } catch (err) {
+    if (!options.quiet) {
+      log(`Warning: Could not estimate video cost (${err?.message || 'error'})`);
+    }
+    return;
+  }
+  const required = parseCostEstimate(estimate, tokenType);
+  if (Number.isFinite(required) && available < required) {
+    throw buildBalanceError(
+      `Insufficient ${tokenLabel} balance for video render (need ~${formatTokenValue(required)}, ` +
+      `have ${formatTokenValue(available)}).`,
+      { tokenType, available, required }
+    );
+  }
+}
+
 async function main() {
+  let exitCode = 0;
   const creds = loadCredentials();
   const log = options.quiet ? () => {} : console.error.bind(console);
   
@@ -1357,10 +1447,12 @@ async function main() {
     await client.connect();
     log('Connected.');
 
+    await ensureSufficientVideoBalance(client, log);
+
     if (options.estimateVideoCost) {
       const modelDefaults = getModelDefaults(options.model, openclawConfig);
-      const steps = options.steps ?? modelDefaults?.steps;
-      if (!Number.isFinite(steps)) {
+      const steps = resolveVideoSteps(options.model, modelDefaults, options.steps);
+      if (!Number.isFinite(steps) || steps <= 0) {
         console.error('Error: --estimate-video-cost requires --steps (or modelDefaults for this model).');
         process.exit(1);
       }
@@ -1439,6 +1531,26 @@ async function main() {
         clearTimeout(timeout);
         reject(new Error(data.error || 'Job failed'));
       });
+
+      client.on(ClientEvent.PROJECT_FAILED, (data) => {
+        clearTimeout(timeout);
+        const message = data?.message || data?.error || 'Project failed';
+        reject(new Error(message));
+      });
+
+      client.on(ClientEvent.PROJECT_EVENT, (event) => {
+        if (event?.type !== 'error') return;
+        clearTimeout(timeout);
+        const message = event?.error?.message || event?.error?.error || 'Project failed';
+        reject(new Error(message));
+      });
+
+      client.on(ClientEvent.JOB_EVENT, (event) => {
+        if (event?.type !== 'error') return;
+        clearTimeout(timeout);
+        const message = event?.error?.message || event?.error?.error || 'Job failed';
+        reject(new Error(message));
+      });
       
       // Progress for video
       if (options.video) {
@@ -1463,7 +1575,7 @@ async function main() {
       const audioBuffer = options.refAudio ? await fetchMediaBuffer(options.refAudio) : undefined;
       const videoBuffer = options.refVideo ? await fetchMediaBuffer(options.refVideo) : undefined;
       const modelDefaults = getModelDefaults(options.model, openclawConfig);
-      const steps = options.steps ?? modelDefaults?.steps;
+      const steps = resolveVideoSteps(options.model, modelDefaults, options.steps);
       const guidance = options.guidance ?? modelDefaults?.guidance;
       
       const projectConfig = {
@@ -1506,7 +1618,7 @@ async function main() {
       if (options.seed !== null && options.seed !== undefined) {
         projectConfig.seed = options.seed;
       }
-      if (steps) {
+      if (Number.isFinite(steps)) {
         projectConfig.steps = steps;
       }
       if (guidance !== null && guidance !== undefined) {
@@ -1727,23 +1839,30 @@ async function main() {
     }
     
   } catch (error) {
-    if (options.json) {
-      console.log(JSON.stringify({
+    exitCode = 1;
+    const shouldJson = options.json || IS_OPENCLAW_INVOCATION;
+    if (shouldJson) {
+      const payload = {
         success: false,
         error: error.message,
         prompt: options.prompt
-      }));
+      };
+      if (error.code) payload.errorCode = error.code;
+      if (error.details) payload.errorDetails = error.details;
+      if (IS_OPENCLAW_INVOCATION) payload.openclaw = true;
+      console.log(JSON.stringify(payload));
+      if (!options.json) {
+        console.error(`Error: ${error.message}`);
+      }
     } else {
       console.error(`Error: ${error.message}`);
     }
-    process.exit(1);
-    
   } finally {
     try {
       if (client.isConnected?.()) await client.disconnect();
     } catch (e) {}
-    process.exit(0);
   }
+  process.exit(exitCode);
 }
 
 main();
