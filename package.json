@@ -1,7 +1,7 @@
 {
   "name": "sogni-gen",
   "version": "1.0.2",
-  "description": "Sogni AI image generation skill for Clawdbot",
+  "description": "Sogni AI image generation plugin for OpenClaw",
   "type": "module",
   "main": "sogni-gen.mjs",
   "bin": {
@@ -14,8 +14,8 @@
     "sogni",
     "ai",
     "image-generation",
-    "clawdbot",
-    "skill"
+    "openclaw",
+    "plugin"
   ],
   "author": "Mauvis Ledford",
   "license": "MIT",

@@ -2,11 +2,11 @@
   <img src="screenshot.jpg" alt="Telegram image render workflow" width="320" />
 </p>
 
-# Image & Video gen for 🦞 Moltbot
+# Image & Video gen for 🦞 OpenClaw
 
 🎨 Generate **images and videos** using [Sogni AI](https://sogni.ai)'s decentralized GPU network.
 
-A [Clawdbot](https://github.com/clawdbot/clawdbot) skill and OpenClaw plugin for AI image + video generation.
+An [OpenClaw](https://github.com/OpenClaw/OpenClaw) plugin for AI image + video generation.
 
 ## Installation
 
@@ -24,26 +24,10 @@ openclaw plugins install sogni-gen
 
 That's it! OpenClaw will handle the rest.
 
-### As a Clawdbot Skill
+### Manual Installation
 
 ```bash
-# Install from npm (no git clone)
-mkdir -p ~/.clawdbot/skills
-cd ~/.clawdbot/skills
-npm i sogni-gen
-ln -sfn node_modules/sogni-gen sogni-gen
-```
-
-```bash
-# Or clone to your skills directory
-git clone git@github.com:Sogni-AI/moltbot-sogni-gen.git ~/.clawdbot/skills/sogni-gen
-cd ~/.clawdbot/skills/sogni-gen
-npm install
-```
-
-### Standalone
-
-```bash
+# Clone the repository
 git clone git@github.com:Sogni-AI/moltbot-sogni-gen.git
 cd moltbot-sogni-gen
 npm install
@@ -232,7 +216,7 @@ Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles
 | `wan_v2.2-14b-fp8_animate-move_lightx2v` | ~5min | Animate-move |
 | `wan_v2.2-14b-fp8_animate-replace_lightx2v` | ~5min | Animate-replace |
 
-## With Clawdbot
+## With OpenClaw
 
 Once installed, just ask your agent:
 
