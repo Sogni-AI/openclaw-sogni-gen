@@ -10,6 +10,20 @@ A [Clawdbot](https://github.com/clawdbot/clawdbot) skill and OpenClaw plugin for
 
 ## Installation
 
+### Quick Install (OpenClaw) - Recommended
+
+This repo ships an `openclaw.plugin.json` manifest so OpenClaw can automatically download and set everything up:
+
+```bash
+# One command to install from GitHub
+openclaw plugins install git@github.com:Sogni-AI/moltbot-sogni-gen.git
+
+# Or if published to npm
+openclaw plugins install sogni-gen
+```
+
+That's it! OpenClaw will handle the rest.
+
 ### As a Clawdbot Skill
 
 ```bash
@@ -22,7 +36,7 @@ ln -sfn node_modules/sogni-gen sogni-gen
 
 ```bash
 # Or clone to your skills directory
-git clone https://github.com/mauvis/sogni-gen ~/.clawdbot/skills/sogni-gen
+git clone git@github.com:Sogni-AI/moltbot-sogni-gen.git ~/.clawdbot/skills/sogni-gen
 cd ~/.clawdbot/skills/sogni-gen
 npm install
 ```
@@ -30,21 +44,9 @@ npm install
 ### Standalone
 
 ```bash
-git clone https://github.com/mauvis/sogni-gen
-cd sogni-gen
+git clone git@github.com:Sogni-AI/moltbot-sogni-gen.git
+cd moltbot-sogni-gen
 npm install
-```
-
-### OpenClaw Plugin
-
-This repo ships an `openclaw.plugin.json` manifest so OpenClaw can load the skill directly.
-
-```bash
-# From a local checkout
-openclaw plugins install /path/to/sogni-gen
-
-# Or via npm (if you publish/update the package)
-openclaw plugins install sogni-gen
 ```
 
 ### OpenClaw Config Defaults
