@@ -122,6 +122,28 @@ node sogni-gen.mjs --json "a dragon eating tacos"
 # Different model
 node sogni-gen.mjs -m flux1-schnell-fp8 "a dragon eating tacos"
 
+# JPG output
+node sogni-gen.mjs --output-format jpg -o dragon.jpg "a dragon eating tacos"
+
+# Image edit with LoRA
+node sogni-gen.mjs -c subject.jpg --lora sogni_lora_v1 --lora-strength 0.7 \
+  "add a neon cyberpunk glow"
+
+# Multiple angles (Qwen + Multiple Angles LoRA)
+node sogni-gen.mjs --multi-angle -c subject.jpg \
+  --azimuth front-right --elevation eye-level --distance medium \
+  --angle-strength 0.9 \
+  "studio portrait, same person"
+
+# 360 turntable (8 azimuths)
+node sogni-gen.mjs --angles-360 -c subject.jpg --distance medium --elevation eye-level \
+  "studio portrait, same person"
+
+# 360 turntable video (looping mp4, uses i2v between angles; requires ffmpeg)
+node sogni-gen.mjs --angles-360 --angles-360-video /tmp/turntable.mp4 \
+  -c subject.jpg --distance medium --elevation eye-level \
+  "studio portrait, same person"
+
 # Text-to-video (t2v)
 node sogni-gen.mjs --video "ocean waves at sunset"
 
@@ -135,7 +157,14 @@ node sogni-gen.mjs --video --ref face.jpg --ref-audio speech.m4a \
 # Animate (motion transfer)
 node sogni-gen.mjs --video --ref subject.jpg --ref-video motion.mp4 \
   --workflow animate-move "transfer motion"
+
+# Estimate video cost (requires --steps)
+node sogni-gen.mjs --video --estimate-video-cost --steps 20 \
+  -m wan_v2.2-14b-fp8_t2v_lightx2v "ocean waves at sunset"
 ```
+
+Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles` LoRA.
+`--angles-360-video` generates i2v clips between consecutive angles (including last→first) and concatenates them with ffmpeg for a seamless loop.
 
 ## Options
 
@@ -149,14 +178,32 @@ node sogni-gen.mjs --video --ref subject.jpg --ref-video motion.mp4 \
 -s, --seed <num>      Specific seed
 --last-seed           Reuse last seed
 --seed-strategy <s>   random|prompt-hash
+--multi-angle         Multiple angles LoRA mode (Qwen Image Edit)
+--angles-360          Generate 8 azimuths (front -> front-left)
+--angles-360-video    Assemble a looping 360 mp4 using i2v between angles (requires ffmpeg)
+--azimuth <key>       front|front-right|right|back-right|back|back-left|left|front-left
+--elevation <key>     low-angle|eye-level|elevated|high-angle
+--distance <key>      close-up|medium|wide
+--angle-strength <n>  LoRA strength for multiple_angles (default: 0.9)
+--angle-description <text>  Optional subject description
+--output-format <f>   Image output format: png|jpg
 --steps <num>         Override steps (model-dependent)
 --guidance <num>      Override guidance (model-dependent)
+--sampler <name>      Sampler (model-dependent)
+--scheduler <name>    Scheduler (model-dependent)
+--lora <id>           LoRA id (repeatable, edit only)
+--loras <ids>         Comma-separated LoRA ids
+--lora-strength <n>   LoRA strength (repeatable)
+--lora-strengths <n>  Comma-separated LoRA strengths
 --token-type <type>   spark|sogni
 --video, -v           Generate video instead of image
 --workflow <type>     t2v|i2v|s2v|animate-move|animate-replace
 --fps <num>           Frames per second (video)
 --duration <sec>      Video duration in seconds
 --frames <num>        Override total frames (video)
+--auto-resize-assets  Auto-resize video reference assets
+--no-auto-resize-assets  Disable auto-resize for video assets
+--estimate-video-cost Estimate video cost and exit (requires --steps)
 --ref <path|url>      Reference image for i2v/s2v/animate
 --ref-end <path|url>  End frame for i2v interpolation
 --ref-audio <path>    Reference audio for s2v

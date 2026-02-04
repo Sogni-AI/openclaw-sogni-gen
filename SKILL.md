@@ -75,8 +75,23 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 | `-s, --seed <num>` | Specific seed | random |
 | `--last-seed` | Reuse seed from last render | - |
 | `--seed-strategy <s>` | Seed strategy: random\|prompt-hash | prompt-hash |
+| `--multi-angle` | Multiple angles LoRA mode (Qwen Image Edit) | - |
+| `--angles-360` | Generate 8 azimuths (front -> front-left) | - |
+| `--angles-360-video` | Assemble looping 360 mp4 using i2v between angles (requires ffmpeg) | - |
+| `--azimuth <key>` | front\|front-right\|right\|back-right\|back\|back-left\|left\|front-left | front |
+| `--elevation <key>` | low-angle\|eye-level\|elevated\|high-angle | eye-level |
+| `--distance <key>` | close-up\|medium\|wide | medium |
+| `--angle-strength <n>` | LoRA strength for multiple_angles | 0.9 |
+| `--angle-description <text>` | Optional subject description | - |
 | `--steps <num>` | Override steps (model-dependent) | - |
 | `--guidance <num>` | Override guidance (model-dependent) | - |
+| `--output-format <f>` | Image output format: png\|jpg | png |
+| `--sampler <name>` | Sampler (model-dependent) | - |
+| `--scheduler <name>` | Scheduler (model-dependent) | - |
+| `--lora <id>` | LoRA id (repeatable, edit only) | - |
+| `--loras <ids>` | Comma-separated LoRA ids | - |
+| `--lora-strength <n>` | LoRA strength (repeatable) | - |
+| `--lora-strengths <n>` | Comma-separated LoRA strengths | - |
 | `--token-type <type>` | Token type: spark\|sogni | spark |
 | `-c, --context <path>` | Context image for editing | - |
 | `--last-image` | Use last generated image as context/ref | - |
@@ -85,6 +100,9 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 | `--fps <num>` | Frames per second (video) | 16 |
 | `--duration <sec>` | Duration in seconds (video) | 5 |
 | `--frames <num>` | Override total frames (video) | - |
+| `--auto-resize-assets` | Auto-resize video assets | true |
+| `--no-auto-resize-assets` | Disable auto-resize | - |
+| `--estimate-video-cost` | Estimate video cost and exit (requires --steps) | - |
 | `--ref <path>` | Reference image for video | required for video |
 | `--ref-end <path>` | End frame for i2v interpolation | - |
 | `--ref-audio <path>` | Reference audio for s2v | - |
@@ -179,6 +197,57 @@ node sogni-gen.mjs --last-image "make it more vibrant"
 ```
 
 When context images are provided without `-m`, defaults to `qwen_image_edit_2511_fp8_lightning`.
+
+## Multiple Angles (Turnaround)
+
+Generate specific camera angles from a single reference image using the Multiple Angles LoRA:
+
+```bash
+# Single angle
+node sogni-gen.mjs --multi-angle -c subject.jpg \
+  --azimuth front-right --elevation eye-level --distance medium \
+  --angle-strength 0.9 \
+  "studio portrait, same person"
+
+# 360 sweep (8 azimuths)
+node sogni-gen.mjs --angles-360 -c subject.jpg --distance medium --elevation eye-level \
+  "studio portrait, same person"
+
+# 360 sweep video (looping mp4, uses i2v between angles; requires ffmpeg)
+node sogni-gen.mjs --angles-360 --angles-360-video /tmp/turntable.mp4 \
+  -c subject.jpg --distance medium --elevation eye-level \
+  "studio portrait, same person"
+```
+
+The prompt is auto-built with the required `<sks>` token plus the selected camera angle keywords.
+`--angles-360-video` generates i2v clips between consecutive angles (including last→first) and concatenates them with ffmpeg for a seamless loop.
+
+### 360 Video Best Practices
+
+When a user requests a "360 video", follow this workflow:
+
+1. **Ask for camera parameters** if not specified:
+   - **Elevation**: high / medium / low angle
+   - **Distance**: close / medium / far
+
+2. **Map user terms to flags**:
+   | User says | Flag value |
+   |-----------|------------|
+   | "high" angle | `--elevation high-angle` |
+   | "medium" angle | `--elevation eye-level` |
+   | "low" angle | `--elevation low-angle` |
+   | "close" | `--distance close-up` |
+   | "medium" distance | `--distance medium` |
+   | "far" | `--distance wide` |
+
+3. **Always use first-frame/last-frame stitching** - the `--angles-360-video` flag automatically handles this by generating i2v clips between consecutive angles including last→first for seamless looping.
+
+4. **Example command**:
+   ```bash
+   node sogni-gen.mjs --angles-360 --angles-360-video /tmp/output.mp4 \
+     -c /path/to/image.png --elevation eye-level --distance medium \
+     "description of subject"
+   ```
 
 ## Video Generation
 
