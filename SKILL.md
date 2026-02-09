@@ -345,6 +345,17 @@ node {{skillDir}}/sogni-gen.mjs -q --video -o /tmp/video.mp4 "ocean waves at sun
 }
 ```
 
+On error (with `--json`), the script returns a single JSON object like:
+
+```json
+{
+  "success": false,
+  "error": "Video width and height must be divisible by 16 (got 500x512).",
+  "errorCode": "INVALID_VIDEO_SIZE",
+  "hint": "Choose --width/--height divisible by 16. For i2v, also match the reference aspect ratio."
+}
+```
+
 ## Cost
 
 Uses Spark tokens from your Sogni account. 512x512 images are most cost-efficient.
@@ -352,5 +363,8 @@ Uses Spark tokens from your Sogni account. 512x512 images are most cost-efficien
 ## Troubleshooting
 
 - **Auth errors**: Check credentials in `~/.config/sogni/credentials`
+- **i2v non-square refs fail immediately**: Video `--width`/`--height` must be divisible by 16, and i2v reference images are aspect-fit into the requested size.
+- **Aspect ratio rule of thumb (manual sizing)**: Reduce `refW:refH` by `gcd`, then choose `width = 16*rw*k`, `height = 16*rh*k` for integer `k`.
+- **If you omit `--width/--height` with a local `--ref`**: the script auto-picks a compatible size that matches the reference aspect ratio and the 16px constraint.
 - **Timeouts**: Try a faster model or increase `-t` timeout
 - **No workers**: Check https://sogni.ai for network status

@@ -8,13 +8,16 @@ import { SogniClientWrapper, ClientEvent, getMaxContextImages } from '@sogni-ai/
 import JSON5 from 'json5';
 import { createHash, randomBytes } from 'crypto';
 import { spawnSync } from 'child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, statSync } from 'fs';
 import { join, dirname, basename, extname } from 'path';
 import { homedir, tmpdir } from 'os';
 
 const LAST_RENDER_PATH = join(homedir(), '.config', 'sogni', 'last-render.json');
 const OPENCLAW_CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || join(homedir(), '.openclaw', 'openclaw.json');
 const IS_OPENCLAW_INVOCATION = Boolean(process.env.OPENCLAW_PLUGIN_CONFIG);
+const RAW_ARGS = process.argv.slice(2);
+const CLI_WANTS_JSON = RAW_ARGS.includes('--json');
+const JSON_ERROR_MODE = CLI_WANTS_JSON || IS_OPENCLAW_INVOCATION;
 const VIDEO_WORKFLOW_DEFAULT_MODELS = {
   't2v': 'wan_v2.2-14b-fp8_t2v_lightx2v',
   'i2v': 'wan_v2.2-14b-fp8_i2v_lightx2v',
@@ -22,6 +25,54 @@ const VIDEO_WORKFLOW_DEFAULT_MODELS = {
   'animate-move': 'wan_v2.2-14b-fp8_animate-move_lightx2v',
   'animate-replace': 'wan_v2.2-14b-fp8_animate-replace_lightx2v'
 };
+
+function buildCliErrorPayload({ message, code, details, hint, prompt }) {
+  const payload = {
+    success: false,
+    error: message || 'Unknown error',
+    prompt: prompt ?? null
+  };
+  if (code) payload.errorCode = code;
+  if (details) payload.errorDetails = details;
+  if (hint) payload.hint = hint;
+  payload.timestamp = new Date().toISOString();
+  payload.node = process.versions.node;
+  payload.cwd = process.cwd();
+  if (IS_OPENCLAW_INVOCATION) payload.openclaw = true;
+  return payload;
+}
+
+function fatalCliError(message, opts = {}) {
+  let prompt = opts.prompt;
+  if (prompt === undefined) {
+    try {
+      // If parsing already populated options, include prompt for better downstream reporting.
+      prompt = options?.prompt ?? null;
+    } catch (e) {
+      prompt = null;
+    }
+  }
+  const payload = buildCliErrorPayload({
+    message,
+    code: opts.code,
+    details: opts.details,
+    hint: opts.hint,
+    prompt
+  });
+
+  if (JSON_ERROR_MODE) {
+    console.log(JSON.stringify(payload));
+    if (!CLI_WANTS_JSON) {
+      // OpenClaw expects JSON, but humans still benefit from stderr.
+      console.error(`Error: ${payload.error}`);
+      if (payload.hint) console.error(`Hint: ${payload.hint}`);
+    }
+  } else {
+    console.error(`Error: ${payload.error}`);
+    if (payload.hint) console.error(`Hint: ${payload.hint}`);
+  }
+  process.exit(1);
+}
 
 function normalizeVideoWorkflow(value) {
   if (!value) return null;
@@ -106,8 +157,10 @@ function parseCsv(value) {
 function parseNumberValue(raw, flagName) {
   const num = Number(raw);
   if (!Number.isFinite(num)) {
-    console.error(`Error: ${flagName} must be a number.`);
-    process.exit(1);
+    fatalCliError(`${flagName} must be a number.`, {
+      code: 'INVALID_ARGUMENT',
+      details: { flag: flagName, value: raw }
+    });
   }
   return num;
 }
@@ -156,6 +209,124 @@ function buildBalanceError(message, details) {
   err.code = 'INSUFFICIENT_BALANCE';
   err.details = details || null;
   return err;
+}
+
+function gcdInt(a, b) {
+  let x = Math.abs(Math.trunc(a));
+  let y = Math.abs(Math.trunc(b));
+  while (y !== 0) {
+    const t = y;
+    y = x % y;
+    x = t;
+  }
+  return x || 1;
+}
+
+function isHttpUrl(value) {
+  return typeof value === 'string' && (value.startsWith('http://') || value.startsWith('https://'));
+}
+
+function getPngDimensions(buffer) {
+  if (!buffer || buffer.length < 24) return null;
+  // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer[0] !== 0x89 || buffer[1] !== 0x50 || buffer[2] !== 0x4E || buffer[3] !== 0x47 ||
+    buffer[4] !== 0x0D || buffer[5] !== 0x0A || buffer[6] !== 0x1A || buffer[7] !== 0x0A
+  ) {
+    return null;
+  }
+  try {
+    const width = buffer.readUInt32BE(16);
+    const height = buffer.readUInt32BE(20);
+    if (!width || !height) return null;
+    return { width, height, type: 'png' };
+  } catch {
+    return null;
+  }
+}
+
+function getJpegDimensions(buffer) {
+  if (!buffer || buffer.length < 4) return null;
+  // JPEG SOI: FF D8
+  if (buffer[0] !== 0xFF || buffer[1] !== 0xD8) return null;
+
+  // Walk segments until we find a Start Of Frame marker that contains dimensions.
+  // Common SOF markers: C0 (baseline), C1, C2 (progressive), C3, C5-C7, C9-CB, CD-CF
+  let i = 2;
+  while (i + 9 < buffer.length) {
+    // Find marker prefix 0xFF
+    if (buffer[i] !== 0xFF) {
+      i++;
+      continue;
+    }
+    // Skip fill bytes 0xFF
+    while (i < buffer.length && buffer[i] === 0xFF) i++;
+    if (i >= buffer.length) break;
+    const marker = buffer[i];
+    i++;
+
+    // Markers without a length field
+    if (marker === 0xD9 || marker === 0xDA) break; // EOI or SOS
+    if (marker >= 0xD0 && marker <= 0xD7) continue; // RSTn
+
+    if (i + 1 >= buffer.length) break;
+    const segmentLength = buffer.readUInt16BE(i);
+    if (segmentLength < 2) break;
+    const segmentStart = i + 2;
+
+    const isSof =
+      (marker >= 0xC0 && marker <= 0xC3) ||
+      (marker >= 0xC5 && marker <= 0xC7) ||
+      (marker >= 0xC9 && marker <= 0xCB) ||
+      (marker >= 0xCD && marker <= 0xCF);
+
+    if (isSof) {
+      if (segmentStart + 7 >= buffer.length) break;
+      try {
+        const height = buffer.readUInt16BE(segmentStart + 1);
+        const width = buffer.readUInt16BE(segmentStart + 3);
+        if (!width || !height) return null;
+        return { width, height, type: 'jpg' };
+      } catch {
+        return null;
+      }
+    }
+
+    i = segmentStart + (segmentLength - 2);
+  }
+
+  return null;
+}
+
+function getImageDimensionsFromBuffer(buffer) {
+  return getPngDimensions(buffer) || getJpegDimensions(buffer);
+}
+
+function computeAspectFitDimensions(refWidth, refHeight, targetWidth, targetHeight) {
+  const rw = Number(refWidth);
+  const rh = Number(refHeight);
+  const tw = Number(targetWidth);
+  const th = Number(targetHeight);
+  if (!rw || !rh || !tw || !th) return null;
+  const scale = Math.min(tw / rw, th / rh);
+  const width = Math.max(1, Math.round(rw * scale));
+  const height = Math.max(1, Math.round(rh * scale));
+  return { width, height };
+}
+
+function suggestVideoSizeForReference(refWidth, refHeight, targetMaxDim) {
+  const g = gcdInt(refWidth, refHeight);
+  const ratioW = Math.max(1, Math.trunc(refWidth / g));
+  const ratioH = Math.max(1, Math.trunc(refHeight / g));
+  const maxDim = Number.isFinite(targetMaxDim) && targetMaxDim > 0 ? targetMaxDim : 512;
+  const unit = 16 * Math.max(ratioW, ratioH);
+  const k = Math.max(1, Math.round(maxDim / unit));
+  return {
+    width: 16 * ratioW * k,
+    height: 16 * ratioH * k,
+    ratioW,
+    ratioH
+  };
 }
 
 const MULTI_ANGLE_AZIMUTHS = [
@@ -210,8 +381,10 @@ function normalizeMultiAngleValue(value, aliases, allowedKeys, label) {
   const normalized = value.toLowerCase().replace(/_/g, '-').replace(/\s+/g, ' ').trim();
   const aliased = aliases.get(normalized) || normalized;
   if (!allowedKeys.includes(aliased)) {
-    console.error(`Error: Invalid ${label} "${value}". Valid options: ${allowedKeys.join(', ')}`);
-    process.exit(1);
+    fatalCliError(`Invalid ${label} "${value}".`, {
+      code: 'INVALID_ARGUMENT',
+      details: { field: label, value, allowed: allowedKeys }
+    });
   }
   return aliased;
 }
@@ -614,8 +787,10 @@ if (openclawConfig) {
 if (options.tokenType) {
   const token = options.tokenType.toLowerCase();
   if (token !== 'spark' && token !== 'sogni') {
-    console.error('Error: --token-type must be "spark" or "sogni".');
-    process.exit(1);
+    fatalCliError('--token-type must be "spark" or "sogni".', {
+      code: 'INVALID_ARGUMENT',
+      details: { flag: '--token-type', value: options.tokenType }
+    });
   }
   options.tokenType = token;
 }
@@ -623,42 +798,49 @@ if (options.tokenType) {
 if (options.seedStrategy) {
   const normalizedStrategy = normalizeSeedStrategy(options.seedStrategy);
   if (!normalizedStrategy) {
-    console.error('Error: --seed-strategy must be "random" or "prompt-hash".');
-    process.exit(1);
+    fatalCliError('--seed-strategy must be "random" or "prompt-hash".', {
+      code: 'INVALID_ARGUMENT',
+      details: { flag: '--seed-strategy', value: options.seedStrategy }
+    });
   }
   options.seedStrategy = normalizedStrategy;
 }
 
 if (cliSet.steps && !Number.isFinite(options.steps)) {
-  console.error('Error: --steps must be a number.');
-  process.exit(1);
+  fatalCliError('--steps must be a number.', {
+    code: 'INVALID_ARGUMENT',
+    details: { flag: '--steps', value: options.steps }
+  });
 }
 
 if (cliSet.guidance && !Number.isFinite(options.guidance)) {
-  console.error('Error: --guidance must be a number.');
-  process.exit(1);
+  fatalCliError('--guidance must be a number.', {
+    code: 'INVALID_ARGUMENT',
+    details: { flag: '--guidance', value: options.guidance }
+  });
 }
 
 if (options.multiAngle) {
   if (options.video) {
-    console.error('Error: --multi-angle is only for image editing.');
-    process.exit(1);
+    fatalCliError('--multi-angle is only for image editing.', { code: 'INVALID_ARGUMENT' });
   }
   if (options.angles360Video && !options.angles360) {
-    console.error('Error: --angles-360-video requires --angles-360.');
-    process.exit(1);
+    fatalCliError('--angles-360-video requires --angles-360.', { code: 'INVALID_ARGUMENT' });
   }
   if (options.angles360Video && options.count !== 1) {
-    console.error('Error: --angles-360-video requires --count 1.');
-    process.exit(1);
+    fatalCliError('--angles-360-video requires --count 1.', {
+      code: 'INVALID_ARGUMENT',
+      details: { count: options.count }
+    });
   }
   if (options._lastImagePath && options.contextImages.length === 0) {
     options.contextImages.push(options._lastImagePath);
     delete options._lastImagePath;
   }
   if (options.contextImages.length === 0) {
-    console.error('Error: --multi-angle requires a reference image (--context or --last-image).');
-    process.exit(1);
+    fatalCliError('--multi-angle requires a reference image (--context or --last-image).', {
+      code: 'INVALID_ARGUMENT'
+    });
   }
   const azimuthKeys = MULTI_ANGLE_AZIMUTHS.map((a) => a.key);
   const elevationKeys = MULTI_ANGLE_ELEVATIONS.map((e) => e.key);
@@ -673,8 +855,10 @@ if (options.multiAngle) {
   options.distance = normalizeMultiAngleValue(options.distance, MULTI_ANGLE_DISTANCE_ALIASES, distanceKeys, 'distance');
 
   if (options.model && !options.model.includes('qwen_image_edit_2511')) {
-    console.error('Error: --multi-angle requires a Qwen Image Edit 2511 model.');
-    process.exit(1);
+    fatalCliError('--multi-angle requires a Qwen Image Edit 2511 model.', {
+      code: 'INVALID_ARGUMENT',
+      details: { model: options.model }
+    });
   }
   if (!options.model) {
     options.model = 'qwen_image_edit_2511_fp8_lightning';
@@ -693,8 +877,9 @@ if (options.multiAngle) {
   }
   if (options.loras.length === 0 && options.loraStrengths.length > 0) {
     if (options.loraStrengths.length > 1) {
-      console.error('Error: --lora-strengths requires explicit --loras when using --multi-angle.');
-      process.exit(1);
+      fatalCliError('--lora-strengths requires explicit --loras when using --multi-angle.', {
+        code: 'INVALID_ARGUMENT'
+      });
     }
     if (options.angleStrength === null || options.angleStrength === undefined) {
       options.angleStrength = options.loraStrengths[0];
@@ -732,49 +917,49 @@ if (options.outputFormat) {
   options.outputFormat = normalized === 'jpeg' ? 'jpg' : normalized;
   if (options.video) {
     if (options.outputFormat !== 'mp4') {
-      console.error('Error: Video output format must be "mp4".');
-      process.exit(1);
+      fatalCliError('Video output format must be "mp4".', {
+        code: 'INVALID_ARGUMENT',
+        details: { outputFormat: options.outputFormat }
+      });
     }
   } else if (!['png', 'jpg'].includes(options.outputFormat)) {
-    console.error('Error: Image output format must be "png" or "jpg".');
-    process.exit(1);
+    fatalCliError('Image output format must be "png" or "jpg".', {
+      code: 'INVALID_ARGUMENT',
+      details: { outputFormat: options.outputFormat }
+    });
   }
 }
 
 if (options.loraStrengths.length > 0 && options.loras.length === 0) {
-  console.error('Error: --lora-strength requires at least one --lora.');
-  process.exit(1);
+  fatalCliError('--lora-strength requires at least one --lora.', { code: 'INVALID_ARGUMENT' });
 }
 
 if (options.loraStrengths.length > 0 && options.loras.length > 0 &&
     options.loraStrengths.length !== options.loras.length) {
-  console.error('Error: --lora-strengths count must match --loras count.');
-  process.exit(1);
+  fatalCliError('--lora-strengths count must match --loras count.', {
+    code: 'INVALID_ARGUMENT',
+    details: { loras: options.loras.length, loraStrengths: options.loraStrengths.length }
+  });
 }
 
 if (options.video && options.loras.length > 0) {
-  console.error('Error: --lora options are image-only.');
-  process.exit(1);
+  fatalCliError('--lora options are image-only.', { code: 'INVALID_ARGUMENT' });
 }
 
 if (options.video && (options.sampler || options.scheduler)) {
-  console.error('Error: --sampler/--scheduler are image-only options.');
-  process.exit(1);
+  fatalCliError('--sampler/--scheduler are image-only options.', { code: 'INVALID_ARGUMENT' });
 }
 
 if (!options.video && options.autoResizeVideoAssets !== null) {
-  console.error('Error: --auto-resize-assets is only valid with --video.');
-  process.exit(1);
+  fatalCliError('--auto-resize-assets is only valid with --video.', { code: 'INVALID_ARGUMENT' });
 }
 
 if (options.estimateVideoCost && !options.video) {
-  console.error('Error: --estimate-video-cost requires --video.');
-  process.exit(1);
+  fatalCliError('--estimate-video-cost requires --video.', { code: 'INVALID_ARGUMENT' });
 }
 
 if (options.angles360Video && !options.angles360) {
-  console.error('Error: --angles-360-video requires --angles-360.');
-  process.exit(1);
+  fatalCliError('--angles-360-video requires --angles-360.', { code: 'INVALID_ARGUMENT' });
 }
 
 // Normalize/validate video workflow before applying defaults
@@ -782,16 +967,20 @@ if (options.video) {
   if (options.videoWorkflow) {
     const normalized = normalizeVideoWorkflow(options.videoWorkflow);
     if (!normalized) {
-      console.error(`Error: Unknown workflow "${options.videoWorkflow}". Use t2v|i2v|s2v|animate-move|animate-replace.`);
-      process.exit(1);
+      fatalCliError(`Unknown workflow "${options.videoWorkflow}". Use t2v|i2v|s2v|animate-move|animate-replace.`, {
+        code: 'INVALID_ARGUMENT',
+        details: { workflow: options.videoWorkflow }
+      });
     }
     options.videoWorkflow = normalized;
   }
 
   const workflowFromModel = inferVideoWorkflowFromModel(options.model);
   if (options.videoWorkflow && workflowFromModel && options.videoWorkflow !== workflowFromModel) {
-    console.error(`Error: Workflow "${options.videoWorkflow}" does not match model "${options.model}".`);
-    process.exit(1);
+    fatalCliError(`Workflow "${options.videoWorkflow}" does not match model "${options.model}".`, {
+      code: 'INVALID_ARGUMENT',
+      details: { workflow: options.videoWorkflow, model: options.model }
+    });
   }
   if (!options.videoWorkflow) {
     options.videoWorkflow = workflowFromModel || inferVideoWorkflowFromAssets(options) || openclawConfig?.defaultVideoWorkflow || 't2v';
@@ -831,47 +1020,110 @@ if (options.video) {
 }
 
 if (!options.prompt && !options.estimateVideoCost && !options.multiAngle) {
-  console.error('Error: No prompt provided. Use --help for usage.');
-  process.exit(1);
+  fatalCliError('No prompt provided. Use --help for usage.', { code: 'INVALID_ARGUMENT' });
 }
 
 if (!options.video && (options.refAudio || options.refVideo || options.videoWorkflow || options.frames)) {
-  console.error('Error: Video-only options (--workflow/--frames/--ref-audio/--ref-video) require --video');
-  process.exit(1);
+  fatalCliError('Video-only options (--workflow/--frames/--ref-audio/--ref-video) require --video.', {
+    code: 'INVALID_ARGUMENT'
+  });
 }
 
 if (options.video) {
   if (options.videoWorkflow === 't2v') {
     if (options.refImage || options.refImageEnd || options.refAudio || options.refVideo) {
-      console.error('Error: t2v does not accept reference image/audio/video.');
-      process.exit(1);
+      fatalCliError('t2v does not accept reference image/audio/video.', {
+        code: 'INVALID_ARGUMENT'
+      });
     }
   } else if (options.videoWorkflow === 'i2v') {
     if (!options.refImage && !options.refImageEnd) {
-      console.error('Error: i2v requires --ref and/or --ref-end.');
-      process.exit(1);
+      fatalCliError('i2v requires --ref and/or --ref-end.', { code: 'INVALID_ARGUMENT' });
     }
     if (options.refAudio || options.refVideo) {
-      console.error('Error: i2v does not accept reference audio/video.');
-      process.exit(1);
+      fatalCliError('i2v does not accept reference audio/video.', { code: 'INVALID_ARGUMENT' });
     }
   } else if (options.videoWorkflow === 's2v') {
     if (!options.refImage || !options.refAudio) {
-      console.error('Error: s2v requires both --ref and --ref-audio.');
-      process.exit(1);
+      fatalCliError('s2v requires both --ref and --ref-audio.', { code: 'INVALID_ARGUMENT' });
     }
     if (options.refVideo) {
-      console.error('Error: s2v does not accept reference video.');
-      process.exit(1);
+      fatalCliError('s2v does not accept reference video.', { code: 'INVALID_ARGUMENT' });
     }
   } else if (options.videoWorkflow === 'animate-move' || options.videoWorkflow === 'animate-replace') {
     if (!options.refImage || !options.refVideo) {
-      console.error('Error: animate workflows require both --ref and --ref-video.');
-      process.exit(1);
+      fatalCliError('animate workflows require both --ref and --ref-video.', { code: 'INVALID_ARGUMENT' });
     }
     if (options.refAudio) {
-      console.error('Error: animate workflows do not accept reference audio.');
-      process.exit(1);
+      fatalCliError('animate workflows do not accept reference audio.', { code: 'INVALID_ARGUMENT' });
+    }
+  }
+}
+
+// Video dimension constraints:
+// - API requires width/height divisible by 16
+// - i2v frequently fails if a non-square reference is fit into a square target (e.g. 512x512),
+//   because the aspect-fit resized dimension can land on a non-16-multiple (e.g. 499x512).
+// To make "just pass --ref" work, infer a compatible default size from the reference aspect ratio
+// when the user did not explicitly set width/height.
+if (options.video) {
+  if (!Number.isFinite(options.width) || options.width <= 0 || !Number.isFinite(options.height) || options.height <= 0) {
+    fatalCliError('Video width/height must be positive numbers.', {
+      code: 'INVALID_ARGUMENT',
+      details: { width: options.width, height: options.height }
+    });
+  }
+  if (options.width % 16 !== 0 || options.height % 16 !== 0) {
+    fatalCliError(`Video width and height must be divisible by 16 (got ${options.width}x${options.height}).`, {
+      code: 'INVALID_VIDEO_SIZE',
+      details: { width: options.width, height: options.height },
+      hint: 'Choose --width/--height divisible by 16. For i2v, also match the reference aspect ratio.'
+    });
+  }
+
+  if (
+    options.videoWorkflow === 'i2v' &&
+    (options.refImage || options.refImageEnd) &&
+    !isHttpUrl(options.refImage || options.refImageEnd)
+  ) {
+    const refPath = options.refImage || options.refImageEnd;
+    if (refPath && existsSync(refPath)) {
+      const buffer = readFileSync(refPath);
+      const dims = getImageDimensionsFromBuffer(buffer);
+      if (dims?.width && dims?.height) {
+        const refAspect = dims.width / dims.height;
+        const targetAspect = options.width / options.height;
+        const aspectMismatch = Math.abs(Math.log(refAspect / targetAspect)) > 0.001;
+
+        if (!cliSet.width && !cliSet.height && aspectMismatch) {
+          const suggested = suggestVideoSizeForReference(dims.width, dims.height, Math.max(options.width, options.height));
+          options.width = suggested.width;
+          options.height = suggested.height;
+          if (!options.quiet) {
+            console.error(
+              `Auto-adjusted video size to ${options.width}x${options.height} ` +
+              `to match reference aspect ratio (${dims.width}x${dims.height}) and 16px constraints.`
+            );
+          }
+        } else if ((cliSet.width || cliSet.height) && aspectMismatch) {
+          const fitted = computeAspectFitDimensions(dims.width, dims.height, options.width, options.height);
+          if (fitted && (fitted.width % 16 !== 0 || fitted.height % 16 !== 0)) {
+            const suggested = suggestVideoSizeForReference(dims.width, dims.height, Math.max(options.width, options.height));
+            fatalCliError(
+              `Reference image ${dims.width}x${dims.height} does not match requested video size ${options.width}x${options.height}.`,
+              {
+                code: 'INVALID_VIDEO_SIZE',
+                details: {
+                  reference: { width: dims.width, height: dims.height },
+                  requested: { width: options.width, height: options.height },
+                  aspectFit: fitted
+                },
+                hint: `Try: --width ${suggested.width} --height ${suggested.height}`
+              }
+            );
+          }
+        }
+      }
     }
   }
 }
@@ -880,13 +1132,17 @@ if (options.video) {
 if (options.contextImages.length > 0 && !options.video) {
   const maxImages = getMaxContextImages(options.model);
   if (maxImages === 0) {
-    console.error(`Error: Model ${options.model} does not support context images.`);
-    console.error('Try: qwen_image_edit_2511_fp8 or qwen_image_edit_2511_fp8_lightning');
-    process.exit(1);
+    fatalCliError(`Model ${options.model} does not support context images.`, {
+      code: 'INVALID_ARGUMENT',
+      details: { model: options.model },
+      hint: 'Try: qwen_image_edit_2511_fp8 or qwen_image_edit_2511_fp8_lightning'
+    });
   }
   if (options.contextImages.length > maxImages) {
-    console.error(`Error: Model ${options.model} supports max ${maxImages} context images, got ${options.contextImages.length}`);
-    process.exit(1);
+    fatalCliError(`Model ${options.model} supports max ${maxImages} context images, got ${options.contextImages.length}.`, {
+      code: 'INVALID_ARGUMENT',
+      details: { model: options.model, maxImages, provided: options.contextImages.length }
+    });
   }
 }
 
@@ -939,12 +1195,15 @@ function loadCredentials() {
       SOGNI_PASSWORD: process.env.SOGNI_PASSWORD
     };
   }
-  
-  console.error('Error: No Sogni credentials found.');
-  console.error('Create ~/.config/sogni/credentials with:');
-  console.error('  SOGNI_USERNAME=your_username');
-  console.error('  SOGNI_PASSWORD=your_password');
-  process.exit(1);
+
+  const err = new Error('No Sogni credentials found.');
+  err.code = 'MISSING_CREDENTIALS';
+  err.hint = 'Set SOGNI_USERNAME/SOGNI_PASSWORD or create ~/.config/sogni/credentials.';
+  err.details = {
+    triedEnv: ['SOGNI_USERNAME', 'SOGNI_PASSWORD'],
+    triedFile: credPath
+  };
+  throw err;
 }
 
 // Save last render info
@@ -962,9 +1221,22 @@ function saveLastRender(info) {
 async function fetchMediaBuffer(pathOrUrl) {
   if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
     const response = await fetch(pathOrUrl);
+    if (!response.ok) {
+      const err = new Error(`Failed to fetch media (${response.status} ${response.statusText})`);
+      err.code = 'FETCH_FAILED';
+      err.details = { url: pathOrUrl, status: response.status, statusText: response.statusText };
+      throw err;
+    }
     return Buffer.from(await response.arrayBuffer());
-  } else {
+  }
+  try {
     return readFileSync(pathOrUrl);
+  } catch (e) {
+    const err = new Error(`Failed to read media file: ${pathOrUrl}`);
+    err.code = 'MISSING_FILE';
+    err.hint = 'Check the path or use a URL.';
+    err.details = { path: pathOrUrl, cause: e?.message || String(e) };
+    throw err;
   }
 }
 
@@ -1001,8 +1273,11 @@ function ensureFfmpegAvailable() {
   const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
   const result = spawnSync(ffmpegPath, ['-version'], { stdio: 'ignore' });
   if (result.error || result.status !== 0) {
-    console.error('Error: ffmpeg is required to assemble the 360 video. Install ffmpeg or set FFMPEG_PATH.');
-    process.exit(1);
+    const err = new Error('ffmpeg is required to assemble the 360 video.');
+    err.code = 'MISSING_FFMPEG';
+    err.hint = 'Install ffmpeg or set FFMPEG_PATH to a working ffmpeg binary.';
+    err.details = { ffmpegPath };
+    throw err;
   }
   return ffmpegPath;
 }
@@ -1018,6 +1293,16 @@ function writeConcatList(filePath, frames, frameDuration) {
     lines.push(`file '${last.replace(/'/g, "'\\''")}'`);
   }
   writeFileSync(filePath, lines.join('\n'));
+}
+
+function isNonEmptyFile(filePath) {
+  try {
+    if (!existsSync(filePath)) return false;
+    const stat = statSync(filePath);
+    return stat.isFile() && stat.size > 0;
+  } catch {
+    return false;
+  }
 }
 
 function buildAngles360Video(outputPath, frames, fps) {
@@ -1037,8 +1322,16 @@ function buildAngles360Video(outputPath, frames, fps) {
   ];
   const result = spawnSync(ffmpegPath, args, { stdio: 'inherit' });
   if (result.error || result.status !== 0) {
-    console.error('Error: ffmpeg failed to build 360 video.');
-    process.exit(1);
+    // ffmpeg sometimes exits non-zero even when the output file is usable.
+    // Treat it as success if the output exists and is non-empty.
+    if (isNonEmptyFile(outputPath)) {
+      console.warn('Warning: ffmpeg exited non-zero, but output video exists and is non-empty. Continuing.');
+      return;
+    }
+    const err = new Error('ffmpeg failed to build 360 video.');
+    err.code = 'FFMPEG_FAILED';
+    err.details = { outputPath };
+    throw err;
   }
 }
 
@@ -1059,8 +1352,14 @@ function buildConcatVideoFromClips(outputPath, clips) {
   ];
   const result = spawnSync(ffmpegPath, args, { stdio: 'inherit' });
   if (result.error || result.status !== 0) {
-    console.error('Error: ffmpeg failed to concatenate 360 video clips.');
-    process.exit(1);
+    if (isNonEmptyFile(outputPath)) {
+      console.warn('Warning: ffmpeg exited non-zero, but output video exists and is non-empty. Continuing.');
+      return;
+    }
+    const err = new Error('ffmpeg failed to concatenate 360 video clips.');
+    err.code = 'FFMPEG_FAILED';
+    err.details = { outputPath, clips: clips?.length ?? null };
+    throw err;
   }
 }
 
@@ -1270,8 +1569,10 @@ async function runMultiAngleFlow(client, log) {
   let videoModelId = null;
   if (videoOutputPath) {
     if (videoFrames.length === 0) {
-      console.error('Error: No local frames available to assemble 360 video.');
-      process.exit(1);
+      const err = new Error('No local frames available to assemble 360 video.');
+      err.code = 'MISSING_FRAMES';
+      err.hint = 'Ensure the frames were downloaded locally (provide --output dir or check permissions).';
+      throw err;
     }
     const clipDir = mkdtempSync(join(tmpdir(), 'sogni-angles-clips-'));
     videoModelId = options.videoModel || openclawConfig?.videoModels?.i2v || VIDEO_WORKFLOW_DEFAULT_MODELS.i2v;
@@ -1430,20 +1731,20 @@ async function ensureSufficientVideoBalance(client, log) {
 
 async function main() {
   let exitCode = 0;
-  const creds = loadCredentials();
   const log = options.quiet ? () => {} : console.error.bind(console);
-  
-  log('Connecting to Sogni...');
-  
-  const client = new SogniClientWrapper({
-    username: creds.SOGNI_USERNAME,
-    password: creds.SOGNI_PASSWORD,
-    network: openclawConfig?.defaultNetwork || 'fast',
-    autoConnect: false,
-    authType: 'token'
-  });
+  let client = null;
   
   try {
+    const creds = loadCredentials();
+    log('Connecting to Sogni...');
+    client = new SogniClientWrapper({
+      username: creds.SOGNI_USERNAME,
+      password: creds.SOGNI_PASSWORD,
+      network: openclawConfig?.defaultNetwork || 'fast',
+      autoConnect: false,
+      authType: 'token'
+    });
+
     await client.connect();
     log('Connected.');
 
@@ -1453,8 +1754,10 @@ async function main() {
       const modelDefaults = getModelDefaults(options.model, openclawConfig);
       const steps = resolveVideoSteps(options.model, modelDefaults, options.steps);
       if (!Number.isFinite(steps) || steps <= 0) {
-        console.error('Error: --estimate-video-cost requires --steps (or modelDefaults for this model).');
-        process.exit(1);
+        const err = new Error('--estimate-video-cost requires --steps (or modelDefaults for this model).');
+        err.code = 'MISSING_STEPS';
+        err.hint = 'Pass --steps explicitly (e.g. --steps 4 for lightx2v models).';
+        throw err;
       }
       const estimateParams = {
         modelId: options.model,
@@ -1845,21 +2148,49 @@ async function main() {
       const payload = {
         success: false,
         error: error.message,
-        prompt: options.prompt
+        prompt: options.prompt ?? null
       };
       if (error.code) payload.errorCode = error.code;
       if (error.details) payload.errorDetails = error.details;
+      if (error.hint) payload.hint = error.hint;
+      payload.timestamp = new Date().toISOString();
+      payload.node = process.versions.node;
+      payload.cwd = process.cwd();
+      payload.context = {
+        video: options.video || false,
+        workflow: options.video ? (options.videoWorkflow || null) : null,
+        model: options.model || null,
+        width: Number.isFinite(options.width) ? options.width : null,
+        height: Number.isFinite(options.height) ? options.height : null,
+        count: Number.isFinite(options.count) ? options.count : null,
+        tokenType: options.tokenType || 'spark',
+        fps: options.video ? options.fps : null,
+        duration: options.video ? (options.frames ? options.frames / options.fps : options.duration) : null,
+        frames: options.video ? (options.frames ?? null) : null,
+        autoResizeVideoAssets: options.video ? (options.autoResizeVideoAssets ?? null) : null,
+        refImage: options.video ? (options.refImage ?? null) : null,
+        refImageEnd: options.video ? (options.refImageEnd ?? null) : null,
+        refAudio: options.video ? (options.refAudio ?? null) : null,
+        refVideo: options.video ? (options.refVideo ?? null) : null
+      };
       if (IS_OPENCLAW_INVOCATION) payload.openclaw = true;
       console.log(JSON.stringify(payload));
       if (!options.json) {
         console.error(`Error: ${error.message}`);
+        if (error.hint) console.error(`Hint: ${error.hint}`);
       }
     } else {
       console.error(`Error: ${error.message}`);
+      if (error.hint) console.error(`Hint: ${error.hint}`);
     }
   } finally {
     try {
-      if (client.isConnected?.()) await client.disconnect();
+      if (client?.isConnected?.()) {
+        await Promise.race([
+          client.disconnect(),
+          new Promise(resolve => setTimeout(resolve, 1000))
+        ]);
+      }
     } catch (e) {}
   }
   process.exit(exitCode);

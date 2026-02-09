@@ -101,3 +101,50 @@ test('count is forwarded to image generation', () => {
   assert.ok(state?.lastImageProject);
   assert.equal(state.lastImageProject.numberOfMedia, 2);
 });
+
+test('i2v infers a 16-multiple video size from non-square reference when width/height not explicitly set', () => {
+  const { exitCode, state } = runCli([
+    '--video',
+    '--workflow', 'i2v',
+    '--ref', 'screenshot.jpg',
+    '--duration', '1',
+    'gentle camera pan'
+  ]);
+  assert.equal(exitCode, 0);
+  assert.ok(state?.lastVideoProject, 'createVideoProject was called');
+  // screenshot.jpg is 1170x1200 (39:40). Smallest 16-multiple size near the default maxDim is 624x640.
+  assert.equal(state.lastVideoProject.width, 624);
+  assert.equal(state.lastVideoProject.height, 640);
+});
+
+test('json error: video width/height must be divisible by 16', () => {
+  const { exitCode, stdout } = runCli([
+    '--json',
+    '--video',
+    '--width', '500',
+    '--height', '512',
+    'ocean waves'
+  ]);
+  assert.equal(exitCode, 1);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, false);
+  assert.equal(payload.errorCode, 'INVALID_VIDEO_SIZE');
+  assert.ok(payload.error.includes('divisible by 16'));
+});
+
+test('json error: i2v rejects mismatched explicit size and suggests a compatible 16-multiple aspect', () => {
+  const { exitCode, stdout } = runCli([
+    '--json',
+    '--video',
+    '--workflow', 'i2v',
+    '--ref', 'screenshot.jpg',
+    '--width', '512',
+    '--height', '512',
+    'gentle camera pan'
+  ]);
+  assert.equal(exitCode, 1);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, false);
+  assert.equal(payload.errorCode, 'INVALID_VIDEO_SIZE');
+  assert.ok(String(payload.hint || '').includes('--width 624 --height 640'));
+});

@@ -152,6 +152,29 @@ node sogni-gen.mjs --video --estimate-video-cost --steps 20 \
 Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles` LoRA.
 `--angles-360-video` generates i2v clips between consecutive angles (including last→first) and concatenates them with ffmpeg for a seamless loop.
 
+## Video Sizing Rules (Aspect Ratios)
+
+- Video `--width` and `--height` must both be divisible by 16.
+- For i2v (and any workflow using `--ref` / `--ref-end`), the reference image is aspect-fit into the requested video size. If the aspect ratios differ, the aspect-fit size can land on a non-16-multiple (for example `499x512`) and the job will fail.
+- If you omit `--width/--height` and your `--ref` is a local file, `sogni-gen` will auto-pick a compatible `width/height` that matches the reference aspect ratio and the 16px constraint.
+- If your `--ref` is a URL, `sogni-gen` cannot infer dimensions locally, so you should pass `--width/--height`.
+
+Manual sizing rule:
+
+- Let `g = gcd(refW, refH)`, `rw = refW/g`, `rh = refH/g`
+- Pick an integer `k >= 1`
+- Use `--width (16 * rw * k) --height (16 * rh * k)`
+
+Example: `1170x1200` reduces to `39:40`, so a compatible size near 512 is `--width 624 --height 640`.
+
+## Error Reporting
+
+- Exit code is non-zero on failure.
+- Default output is human-readable errors on stderr.
+- With `--json`, the script prints a single JSON object to stdout for both success and failure.
+  - On failure: `{"success": false, "error": "...", "errorCode": "...?", "errorDetails": {...}?, "hint": "...?", "context": {...}?}`
+- When invoked by OpenClaw, errors are always returned as JSON (and also logged to stderr for humans).
+
 ## Options
 
 ```
