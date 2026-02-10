@@ -310,8 +310,8 @@ function getImageDimensionsFromBuffer(buffer) {
 async function resizeImageBufferToDiv16(buffer, originalWidth, originalHeight) {
   // Calculate target div-16 dimensions that maintain aspect ratio
   const roundToDiv16 = (n) => Math.round(n / 16) * 16;
-  const targetWidth = Math.max(480, Math.min(1536, roundToDiv16(originalWidth)));
-  const targetHeight = Math.max(480, Math.min(1536, roundToDiv16(originalHeight)));
+  const targetWidth = Math.max(MIN_VIDEO_DIMENSION, Math.min(MAX_VIDEO_DIMENSION, roundToDiv16(originalWidth)));
+  const targetHeight = Math.max(MIN_VIDEO_DIMENSION, Math.min(MAX_VIDEO_DIMENSION, roundToDiv16(originalHeight)));
 
   // Resize using sharp with fit:inside (maintains aspect ratio)
   const resizedBuffer = await sharp(buffer)
@@ -342,6 +342,8 @@ function normalizeVideoDimensionsLikeWrapper(width, height) {
   let targetHeight = Number(height);
   let adjusted = false;
 
+  const effectiveMin = MIN_VIDEO_DIMENSION;
+
   if (!Number.isFinite(targetWidth) || !Number.isFinite(targetHeight)) {
     return { width: targetWidth, height: targetHeight, adjusted: false };
   }
@@ -353,8 +355,8 @@ function normalizeVideoDimensionsLikeWrapper(width, height) {
     adjusted = true;
   }
 
-  if (targetWidth < MIN_VIDEO_DIMENSION || targetHeight < MIN_VIDEO_DIMENSION) {
-    const scaleFactor = Math.max(MIN_VIDEO_DIMENSION / targetWidth, MIN_VIDEO_DIMENSION / targetHeight);
+  if (targetWidth < effectiveMin || targetHeight < effectiveMin) {
+    const scaleFactor = Math.max(effectiveMin / targetWidth, effectiveMin / targetHeight);
     targetWidth = Math.floor(targetWidth * scaleFactor);
     targetHeight = Math.floor(targetHeight * scaleFactor);
     adjusted = true;
@@ -373,12 +375,12 @@ function normalizeVideoDimensionsLikeWrapper(width, height) {
   targetWidth = roundedWidth;
   targetHeight = roundedHeight;
 
-  if (targetWidth < MIN_VIDEO_DIMENSION) {
-    targetWidth = Math.ceil(MIN_VIDEO_DIMENSION / VIDEO_DIMENSION_MULTIPLE) * VIDEO_DIMENSION_MULTIPLE;
+  if (targetWidth < effectiveMin) {
+    targetWidth = Math.ceil(effectiveMin / VIDEO_DIMENSION_MULTIPLE) * VIDEO_DIMENSION_MULTIPLE;
     adjusted = true;
   }
-  if (targetHeight < MIN_VIDEO_DIMENSION) {
-    targetHeight = Math.ceil(MIN_VIDEO_DIMENSION / VIDEO_DIMENSION_MULTIPLE) * VIDEO_DIMENSION_MULTIPLE;
+  if (targetHeight < effectiveMin) {
+    targetHeight = Math.ceil(effectiveMin / VIDEO_DIMENSION_MULTIPLE) * VIDEO_DIMENSION_MULTIPLE;
     adjusted = true;
   }
 
@@ -418,6 +420,7 @@ function pickCompatibleI2vBoundingBox(refWidth, refHeight, desiredWidth, desired
       if (!Number.isFinite(normalized.width) || !Number.isFinite(normalized.height)) continue;
       const out = predictSharpInsideResizeDims(refWidth, refHeight, normalized.width, normalized.height);
       if (!out) continue;
+      // Require both output dimensions >= MIN_VIDEO_DIMENSION for API compatibility
       if (out.width < MIN_VIDEO_DIMENSION || out.height < MIN_VIDEO_DIMENSION) continue;
 
       const isPerfect = out.width % VIDEO_DIMENSION_MULTIPLE === 0 && out.height % VIDEO_DIMENSION_MULTIPLE === 0;
@@ -1242,11 +1245,21 @@ if (options.video) {
           };
         }
 
-        if (predicted && (predicted.width % VIDEO_DIMENSION_MULTIPLE !== 0 || predicted.height % VIDEO_DIMENSION_MULTIPLE !== 0)) {
-          // First try to find a perfect match
-          let candidate = pickCompatibleI2vBoundingBox(dims.width, dims.height, options.width, options.height);
+        // Check if we need to find a better bounding box for i2v:
+        // - Output not divisible by 16, OR
+        // - Either dimension below MIN_VIDEO_DIMENSION (480)
+        const needsBetterBox = predicted && (
+          predicted.width % VIDEO_DIMENSION_MULTIPLE !== 0 ||
+          predicted.height % VIDEO_DIMENSION_MULTIPLE !== 0 ||
+          predicted.width < MIN_VIDEO_DIMENSION ||
+          predicted.height < MIN_VIDEO_DIMENSION
+        );
+
+        if (needsBetterBox) {
+          // Try to find a compatible bounding box (allow imperfect matches for better portrait/landscape support)
+          let candidate = pickCompatibleI2vBoundingBox(dims.width, dims.height, options.width, options.height, { allowImperfect: true });
           if (!candidate) {
-            // No perfect match found - will need to pre-resize the reference image
+            // No compatible match found - will need to pre-resize the reference image
             options._needsRefResize = true;
             if (!options.quiet) {
               console.error(
