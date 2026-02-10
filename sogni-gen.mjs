@@ -591,7 +591,8 @@ const options = {
   refImageEnd: null, // End frame for video interpolation
   refAudio: null, // Reference audio for s2v
   refVideo: null, // Reference video for animate workflows
-  contextImages: [] // Context images for image editing
+  contextImages: [], // Context images for image editing
+  looping: false // Create looping video (i2v only): generate A→B then B→A and concatenate
 };
 const cliSet = {
   output: false,
@@ -754,6 +755,9 @@ for (let i = 0; i < args.length; i++) {
   } else if (arg === '--ref-video') {
     options.refVideo = args[++i];
     cliSet.refVideo = true;
+  } else if (arg === '--looping' || arg === '--loop') {
+    options.looping = true;
+    cliSet.looping = true;
   } else if (arg === '-c' || arg === '--context') {
     options.contextImages.push(args[++i]);
     cliSet.context = true;
@@ -836,6 +840,7 @@ Video Options:
   --ref-end <path|url>  End frame for interpolation/morphing
   --ref-audio <path>    Reference audio for s2v
   --ref-video <path>    Reference video for animate workflows
+  --looping, --loop     Create seamless loop (i2v only): A→B→A
   --last-image          Use last generated image as reference
 
 General:
@@ -1196,6 +1201,22 @@ if (options.video) {
       fatalCliError('animate workflows do not accept reference audio.', { code: 'INVALID_ARGUMENT' });
     }
   }
+
+  // Validate looping flag
+  if (options.looping) {
+    if (!options.video) {
+      fatalCliError('--looping requires --video.', { code: 'INVALID_ARGUMENT' });
+    }
+    if (options.videoWorkflow !== 'i2v') {
+      fatalCliError('--looping is only supported with i2v workflow.', { code: 'INVALID_ARGUMENT' });
+    }
+    if (!options.refImage) {
+      fatalCliError('--looping requires --ref (reference image).', { code: 'INVALID_ARGUMENT' });
+    }
+    if (options.refImageEnd) {
+      fatalCliError('--looping cannot be used with --ref-end (end frame is auto-generated).', { code: 'INVALID_ARGUMENT' });
+    }
+  }
 }
 
 // Video dimensions:
@@ -1550,6 +1571,29 @@ function buildAngles360Video(outputPath, frames, fps) {
     const err = new Error('ffmpeg failed to build 360 video.');
     err.code = 'FFMPEG_FAILED';
     err.details = { outputPath };
+    throw err;
+  }
+}
+
+function extractLastFrameFromVideo(videoPath, outputImagePath) {
+  const ffmpegPath = ensureFfmpegAvailable();
+
+  // Extract the last frame as PNG by seeking to 1 second before end
+  const args = [
+    '-sseof', '-1',  // Seek to 1 second from end
+    '-i', videoPath,
+    '-update', '1',  // Write single image
+    '-frames:v', '1',
+    '-y',
+    outputImagePath
+  ];
+
+  const result = spawnSync(ffmpegPath, args, { stdio: 'pipe' });
+
+  if (result.error || result.status !== 0 || !isNonEmptyFile(outputImagePath)) {
+    const err = new Error('Failed to extract last frame from video.');
+    err.code = 'FFMPEG_EXTRACT_FAILED';
+    err.details = { videoPath, outputImagePath, stderr: result.stderr?.toString() };
     throw err;
   }
 }
@@ -2414,12 +2458,120 @@ async function main() {
       if (options.output && urls[0]) {
         const response = await fetch(urls[0]);
         const buffer = Buffer.from(await response.arrayBuffer());
-        
+
         const dir = dirname(options.output);
         if (dir && dir !== '.' && !existsSync(dir)) mkdirSync(dir, { recursive: true });
-        
-        writeFileSync(options.output, buffer);
-        log(`Saved to ${options.output}`);
+
+        // Handle looping for i2v workflow
+        if (options.looping && options.videoWorkflow === 'i2v' && options.refImage) {
+          log('Creating looping video (A→B→A)...');
+
+          // Save first clip temporarily
+          const tempDir = mkdtempSync(join(tmpdir(), 'sogni-loop-'));
+          const clip1Path = join(tempDir, 'clip1.mp4');
+          const lastFramePath = join(tempDir, 'last-frame.png');
+          const clip2Path = join(tempDir, 'clip2.mp4');
+
+          writeFileSync(clip1Path, buffer);
+          log('Extracting last frame...');
+          extractLastFrameFromVideo(clip1Path, lastFramePath);
+
+          // Generate second clip (last frame → original image)
+          log('Generating return clip (B→A)...');
+
+          // Get model defaults for steps and guidance
+          const modelDefaults2 = getModelDefaults(options.model, openclawConfig);
+          const steps2 = resolveVideoSteps(options.model, modelDefaults2, options.steps);
+          const guidance2 = options.guidance ?? modelDefaults2?.guidance;
+
+          const projectConfig2 = {
+            modelId: options.model,
+            positivePrompt: options.prompt,
+            negativePrompt: '',
+            stylePrompt: '',
+            numberOfMedia: 1,
+            referenceImage: readFileSync(lastFramePath),
+            referenceImageEnd: readFileSync(options.refImage),
+            fps: options.fps,
+            width: options.width,
+            height: options.height,
+            tokenType: options.tokenType || 'spark',
+            waitForCompletion: false,
+            disableNSFWFilter: true
+          };
+
+          if (options.frames) projectConfig2.numberOfFrames = options.frames;
+          else if (options.duration) projectConfig2.duration = options.duration;
+          if (Number.isFinite(steps2)) projectConfig2.steps = steps2;
+          if (guidance2 !== null && guidance2 !== undefined) projectConfig2.guidance = guidance2;
+
+          // Create a new client for second clip to avoid event conflicts
+          const creds = loadCredentials();
+          const client2 = new SogniClientWrapper({
+            username: creds.SOGNI_USERNAME,
+            password: creds.SOGNI_PASSWORD,
+            network: openclawConfig?.defaultNetwork || 'fast',
+            autoConnect: false,
+            authType: 'token'
+          });
+          await client2.connect();
+
+          // Create second clip and wait for completion via events
+          const clip2Promise = new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error('Second clip generation timed out'));
+            }, options.timeout);
+
+            client2.on(ClientEvent.JOB_COMPLETED, async (data) => {
+              try {
+                clearTimeout(timeout);
+                const clip2Url = data.videoUrl;
+                if (!clip2Url) {
+                  reject(new Error('No video URL returned for second clip.'));
+                  return;
+                }
+
+                // Download second clip
+                const response2 = await fetch(clip2Url);
+                const buffer2 = Buffer.from(await response2.arrayBuffer());
+                writeFileSync(clip2Path, buffer2);
+
+                await client2.disconnect();
+                resolve();
+              } catch (err) {
+                clearTimeout(timeout);
+                reject(err);
+              }
+            });
+
+            client2.on(ClientEvent.JOB_FAILED, (data) => {
+              clearTimeout(timeout);
+              reject(new Error(data.error || 'Second clip generation failed'));
+            });
+
+            client2.on(ClientEvent.PROJECT_FAILED, (data) => {
+              clearTimeout(timeout);
+              reject(new Error(data?.message || 'Second clip project failed'));
+            });
+
+            // Show progress for second clip
+            client2.on(ClientEvent.PROJECT_PROGRESS, (data) => {
+              if (data.percentage && data.percentage > 0) {
+                log(`Progress: ${Math.round(data.percentage)}%`);
+              }
+            });
+          });
+
+          await client2.createVideoProject(projectConfig2);
+          await clip2Promise;
+
+          log('Concatenating clips...');
+          buildConcatVideoFromClips(options.output, [clip1Path, clip2Path]);
+          log(`Saved looping video to ${options.output}`);
+        } else {
+          writeFileSync(options.output, buffer);
+          log(`Saved to ${options.output}`);
+        }
       }
       
       // Output result
