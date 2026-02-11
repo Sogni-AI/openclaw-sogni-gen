@@ -1582,12 +1582,14 @@ function buildAngles360Video(outputPath, frames, fps) {
 function extractLastFrameFromVideo(videoPath, outputImagePath) {
   const ffmpegPath = ensureFfmpegAvailable();
 
-  // Extract the actual last frame as PNG
+  // Extract the last frame by reading through the video with update mode
+  // This processes all frames but only keeps the last one
   const args = [
-    '-sseof', '-0.01',  // Seek to 0.01 seconds from end (essentially the last frame)
     '-i', videoPath,
-    '-update', '1',  // Write single image
-    '-frames:v', '1',
+    '-vf', 'select=gte(n\\,0)',  // Select all frames (just pass-through)
+    '-vsync', '0',
+    '-update', '1',  // Update same output file (keeps only last frame)
+    '-q:v', '1',  // Best quality
     '-y',
     outputImagePath
   ];
@@ -1595,9 +1597,23 @@ function extractLastFrameFromVideo(videoPath, outputImagePath) {
   const result = spawnSync(ffmpegPath, args, { stdio: 'pipe' });
 
   if (result.error || result.status !== 0 || !isNonEmptyFile(outputImagePath)) {
+    const stderr = result.stderr?.toString() || '';
+    const stdout = result.stdout?.toString() || '';
+    console.error('FFmpeg extraction failed:');
+    console.error('  Video path:', videoPath);
+    console.error('  Output path:', outputImagePath);
+    console.error('  Exit code:', result.status);
+    console.error('  Error:', result.error?.message || 'none');
+    if (stderr) console.error('  Stderr:', stderr);
+    if (stdout) console.error('  Stdout:', stdout);
+    console.error('  Output file exists:', existsSync(outputImagePath));
+    if (existsSync(outputImagePath)) {
+      console.error('  Output file size:', statSync(outputImagePath).size);
+    }
+
     const err = new Error('Failed to extract last frame from video.');
     err.code = 'FFMPEG_EXTRACT_FAILED';
-    err.details = { videoPath, outputImagePath, stderr: result.stderr?.toString() };
+    err.details = { videoPath, outputImagePath, stderr, stdout, status: result.status };
     throw err;
   }
 }
