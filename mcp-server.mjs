@@ -110,7 +110,7 @@ function checkCredentials() {
 // Result formatting
 // ---------------------------------------------------------------------------
 
-function formatSuccess(result) {
+async function formatSuccess(result) {
   const parts = [];
 
   if (result.type === 'balance') {
@@ -144,10 +144,23 @@ function formatSuccess(result) {
 
   const content = [{ type: 'text', text: parts.join('\n') }];
 
-  // Also include image URLs as image content so Claude can see them
+  // Download images and include as Base64-encoded content so Claude can see them
   for (const url of urls) {
     if (/\.(png|jpg|jpeg|webp|gif)(\?|$)/i.test(url)) {
-      content.push({ type: 'image', data: url, mimeType: 'image/png' });
+      try {
+        const resp = await fetch(url);
+        if (resp.ok) {
+          const buf = Buffer.from(await resp.arrayBuffer());
+          const ext = url.match(/\.(png|jpg|jpeg|webp|gif)/i)?.[1]?.toLowerCase() || 'png';
+          const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+            : ext === 'webp' ? 'image/webp'
+            : ext === 'gif' ? 'image/gif'
+            : 'image/png';
+          content.push({ type: 'image', data: buf.toString('base64'), mimeType });
+        }
+      } catch {
+        // If download fails, skip embedding — the URL is still in the text
+      }
     }
   }
 
@@ -161,7 +174,7 @@ function formatError(result) {
   return { content: [{ type: 'text', text: parts.join('\n') }], isError: true };
 }
 
-function formatResult(result) {
+async function formatResult(result) {
   if (result.success === false) return formatError(result);
   return formatSuccess(result);
 }
