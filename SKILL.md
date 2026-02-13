@@ -110,7 +110,10 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 | `--auto-resize-assets` | Auto-resize video assets | true |
 | `--no-auto-resize-assets` | Disable auto-resize | - |
 | `--estimate-video-cost` | Estimate video cost and exit (requires --steps) | - |
-| `--ref <path>` | Reference image for video | required for video |
+| `--photobooth` | Face transfer mode (InstantID + SDXL Turbo) | - |
+| `--cn-strength <n>` | ControlNet strength (photobooth) | 0.8 |
+| `--cn-guidance-end <n>` | ControlNet guidance end point (photobooth) | 0.3 |
+| `--ref <path>` | Reference image for video or photobooth face | required for video/photobooth |
 | `--ref-end <path>` | End frame for i2v interpolation | - |
 | `--ref-audio <path>` | Reference audio for s2v | - |
 | `--ref-video <path>` | Reference video for animate workflows | - |
@@ -134,6 +137,7 @@ When installed as an OpenClaw plugin, `sogni-gen` will read defaults from:
         "config": {
           "defaultImageModel": "z_image_turbo_bf16",
           "defaultEditModel": "qwen_image_edit_2511_fp8_lightning",
+          "defaultPhotoboothModel": "coreml-sogniXLturbo_alpha1_ad",
           "videoModels": {
             "t2v": "wan_v2.2-14b-fp8_t2v_lightx2v",
             "i2v": "wan_v2.2-14b-fp8_i2v_lightx2v",
@@ -177,6 +181,7 @@ Seed strategies: `prompt-hash` (deterministic) or `random`.
 | `chroma-v.46-flash_fp8` | Medium | Balanced |
 | `qwen_image_edit_2511_fp8` | Medium | Image editing with context (up to 3) |
 | `qwen_image_edit_2511_fp8_lightning` | Fast | Quick image editing |
+| `coreml-sogniXLturbo_alpha1_ad` | Fast | Photobooth face transfer (SDXL Turbo) |
 
 ## Video Models
 
@@ -205,6 +210,32 @@ node sogni-gen.mjs --last-image "make it more vibrant"
 ```
 
 When context images are provided without `-m`, defaults to `qwen_image_edit_2511_fp8_lightning`.
+
+## Photobooth (Face Transfer)
+
+Generate stylized portraits from a face photo using InstantID ControlNet. When a user mentions "photobooth", wants a stylized portrait of themselves, or asks to transfer their face into a style, use `--photobooth` with `--ref` pointing to their face image.
+
+```bash
+# Basic photobooth
+node sogni-gen.mjs --photobooth --ref face.jpg "80s fashion portrait"
+
+# Multiple outputs
+node sogni-gen.mjs --photobooth --ref face.jpg -n 4 "LinkedIn professional headshot"
+
+# Custom ControlNet tuning
+node sogni-gen.mjs --photobooth --ref face.jpg --cn-strength 0.6 --cn-guidance-end 0.5 "oil painting"
+```
+
+Uses SDXL Turbo (`coreml-sogniXLturbo_alpha1_ad`) at 1024x1024 by default. The face image is passed via `--ref` and styled according to the prompt. Cannot be combined with `--video` or `-c/--context`.
+
+**Agent usage:**
+```bash
+# Photobooth: stylize a face photo
+node {{skillDir}}/sogni-gen.mjs -q --photobooth --ref /path/to/face.jpg -o /tmp/stylized.png "80s fashion portrait"
+
+# Multiple photobooth outputs
+node {{skillDir}}/sogni-gen.mjs -q --photobooth --ref /path/to/face.jpg -n 4 -o /tmp/stylized.png "LinkedIn professional headshot"
+```
 
 ## Multiple Angles (Turnaround)
 
@@ -335,6 +366,9 @@ node {{skillDir}}/sogni-gen.mjs -q --video --ref /path/to/image.png -o /tmp/vide
 
 # Generate text-to-video
 node {{skillDir}}/sogni-gen.mjs -q --video -o /tmp/video.mp4 "ocean waves at sunset"
+
+# Photobooth: stylize a face photo
+node {{skillDir}}/sogni-gen.mjs -q --photobooth --ref /path/to/face.jpg -o /tmp/stylized.png "80s fashion portrait"
 
 # Check current SPARK/SOGNI balances (no prompt required)
 node {{skillDir}}/sogni-gen.mjs --json --balance

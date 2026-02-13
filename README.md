@@ -52,6 +52,7 @@ If OpenClaw loads this plugin, `sogni-gen` will read defaults from your OpenClaw
         "config": {
           "defaultImageModel": "z_image_turbo_bf16",
           "defaultEditModel": "qwen_image_edit_2511_fp8_lightning",
+          "defaultPhotoboothModel": "coreml-sogniXLturbo_alpha1_ad",
           "videoModels": {
             "t2v": "wan_v2.2-14b-fp8_t2v_lightx2v",
             "i2v": "wan_v2.2-14b-fp8_i2v_lightx2v",
@@ -123,6 +124,10 @@ node sogni-gen.mjs -m flux1-schnell-fp8 "a dragon eating tacos"
 # JPG output
 node sogni-gen.mjs --output-format jpg -o dragon.jpg "a dragon eating tacos"
 
+# Photobooth (face transfer)
+node sogni-gen.mjs --photobooth --ref face.jpg "80s fashion portrait"
+node sogni-gen.mjs --photobooth --ref face.jpg -n 4 "LinkedIn professional headshot"
+
 # Image edit with LoRA
 node sogni-gen.mjs -c subject.jpg --lora sogni_lora_v1 --lora-strength 0.7 \
   "add a neon cyberpunk glow"
@@ -160,6 +165,26 @@ node sogni-gen.mjs --video --ref subject.jpg --ref-video motion.mp4 \
 node sogni-gen.mjs --video --estimate-video-cost --steps 20 \
   -m wan_v2.2-14b-fp8_t2v_lightx2v "ocean waves at sunset"
 ```
+
+## Photobooth (Face Transfer)
+
+Generate stylized portraits from a face photo using InstantID ControlNet:
+
+```bash
+# Basic photobooth
+node sogni-gen.mjs --photobooth --ref face.jpg "80s fashion portrait"
+
+# Multiple outputs
+node sogni-gen.mjs --photobooth --ref face.jpg -n 4 "LinkedIn professional headshot"
+
+# Custom ControlNet tuning
+node sogni-gen.mjs --photobooth --ref face.jpg --cn-strength 0.6 --cn-guidance-end 0.5 "oil painting"
+
+# Custom model
+node sogni-gen.mjs --photobooth --ref face.jpg -m coreml-dreamshaperXL_v21TurboDPMSDE "anime style"
+```
+
+Uses SDXL Turbo (`coreml-sogniXLturbo_alpha1_ad`) at 1024x1024 by default. The face image is passed via `--ref` and styled according to the prompt. Cannot be combined with `--video` or `-c/--context`.
 
 Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles` LoRA.
 `--angles-360-video` generates i2v clips between consecutive angles (including last→first) and concatenates them with ffmpeg for a seamless loop.
@@ -221,7 +246,10 @@ Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles
 --auto-resize-assets  Auto-resize video reference assets
 --no-auto-resize-assets  Disable auto-resize for video assets
 --estimate-video-cost Estimate video cost and exit (requires --steps)
---ref <path|url>      Reference image for i2v/s2v/animate
+--photobooth          Face transfer mode (InstantID + SDXL Turbo)
+--cn-strength <n>     ControlNet strength (default: 0.8)
+--cn-guidance-end <n> ControlNet guidance end point (default: 0.3)
+--ref <path|url>      Reference image for i2v/s2v/animate/photobooth
 --ref-end <path|url>  End frame for i2v interpolation
 --ref-audio <path>    Reference audio for s2v
 --ref-video <path>    Reference video for animate workflows
@@ -242,6 +270,7 @@ Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles
 | `chroma-v.46-flash_fp8` | ~30s | Balanced |
 | `qwen_image_edit_2511_fp8` | ~30s | Image editing with context |
 | `qwen_image_edit_2511_fp8_lightning` | ~8s | Fast image editing |
+| `coreml-sogniXLturbo_alpha1_ad` | Fast | Photobooth face transfer (SDXL Turbo) |
 | `wan_v2.2-14b-fp8_t2v_lightx2v` | ~5min | Text-to-video |
 | `wan_v2.2-14b-fp8_i2v_lightx2v` | ~3-5min | Image-to-video |
 | `wan_v2.2-14b-fp8_s2v_lightx2v` | ~5min | Sound-to-video |
