@@ -2485,15 +2485,15 @@ async function main() {
         steps,
         guidance,
         disableNSFWFilter: true,
-        sampler: options.sampler || 'DPM++ SDE',
-        scheduler: options.scheduler || 'Karras',
+        sampler: options.sampler || 'dpmpp_sde',
+        scheduler: options.scheduler || 'karras',
         controlNet: {
           name: 'instantid',
           image: faceBuffer,
-          strength: options.cnStrength ?? 0.8,
+          strength: options.cnStrength ?? 0.7,
           mode: 'balanced',
           guidanceStart: 0,
-          guidanceEnd: options.cnGuidanceEnd ?? 0.3,
+          guidanceEnd: options.cnGuidanceEnd ?? 0.6,
         }
       };
 
@@ -2502,7 +2502,12 @@ async function main() {
       if (options.loras.length > 0) projectConfig.loras = options.loras;
       if (options.loraStrengths.length > 0) projectConfig.loraStrengths = options.loraStrengths;
 
-      await client.createImageProject(projectConfig);
+      const projectResult = await client.createImageProject(projectConfig);
+
+      // Check for errors in the response (e.g., insufficient tokens)
+      if (projectResult?.error || projectResult?.message) {
+        throw new Error(projectResult.error || projectResult.message);
+      }
     } else {
       // Standard image generation
       log(`Generating with ${options.model}...`);
@@ -2796,8 +2801,8 @@ async function main() {
           output.refImage = options.refImage;
           output.controlNet = {
             name: 'instantid',
-            strength: options.cnStrength ?? 0.8,
-            guidanceEnd: options.cnGuidanceEnd ?? 0.3,
+            strength: options.cnStrength ?? 0.7,
+            guidanceEnd: options.cnGuidanceEnd ?? 0.6,
           };
         }
         console.log(JSON.stringify(output));

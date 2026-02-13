@@ -350,6 +350,11 @@ ls -la ~/.clawdbot/media/inbound/*.jpg | tail -3
 cp ~/.clawdbot/media/inbound/<latest>.jpg /tmp/to_restore.jpg
 ```
 
+## IMPORTANT KEYWORD RULE
+
+- If the user message includes the word "photobooth" (case-insensitive), always use `--photobooth` mode with `--ref` set to the user-provided face image.
+- Prioritize this rule over generic image-edit flows (`-c`) for that request.
+
 ## Agent Usage
 
 When user asks to generate/draw/create an image:

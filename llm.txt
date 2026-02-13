@@ -138,6 +138,7 @@ node {{skillDir}}/sogni-gen.mjs --json --balance
 
 ## Agent Behavior Guidelines
 
+0. If the user includes the keyword "photobooth" (case-insensitive), always use `--photobooth` with `--ref` to the user face image. Do not fall back to `-c` edit flow for that request.
 1. When the user asks to "draw", "generate", "create", or "make" an image: generate an image and send it.
 2. When they ask to "animate", "make a video", or "create a video": use --video mode.
 3. When they send a photo and ask to edit/change/modify it: use -c with their image.
