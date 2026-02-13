@@ -2,13 +2,44 @@
   <img src="screenshot.jpg" alt="Telegram image render workflow" width="320" />
 </p>
 
-# Image & Video gen for 🦞 OpenClaw
+# Sogni Gen — AI Image & Video Generation
 
 🎨 Generate **images and videos** using [Sogni AI](https://sogni.ai)'s decentralized GPU network.
 
-An [OpenClaw](https://github.com/OpenClaw/OpenClaw) plugin for AI image + video generation.
+Works as an [MCP server](https://modelcontextprotocol.io/) for **Claude Code** and **Claude Desktop**, and as an [OpenClaw](https://github.com/OpenClaw/OpenClaw) plugin.
 
 ## Installation
+
+### Claude Code (one command)
+
+```bash
+claude mcp add sogni -- npx -y -p sogni-gen sogni-gen-mcp
+```
+
+After install, just ask Claude things like:
+- "Generate an image of a sunset over mountains"
+- "Make a video of a cat playing piano"
+- "Edit this image to add a rainbow"
+- "Check my Sogni balance"
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "sogni": {
+      "command": "npx",
+      "args": ["-y", "-p", "sogni-gen", "sogni-gen-mcp"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving. The same natural-language commands work.
+
+> **Note:** Both Claude Code and Claude Desktop require Sogni credentials — see [Setup](#setup) below.
 
 ### Quick Install (OpenClaw) - Recommended
 
