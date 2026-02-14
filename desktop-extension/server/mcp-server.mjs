@@ -110,7 +110,7 @@ function checkCredentials() {
 // Result formatting
 // ---------------------------------------------------------------------------
 
-function formatSuccess(result) {
+async function formatSuccess(result) {
   const parts = [];
 
   if (result.type === 'balance') {
@@ -144,11 +144,53 @@ function formatSuccess(result) {
 
   const content = [{ type: 'text', text: parts.join('\n') }];
 
-  // Also include image URLs as image content so Claude can see them
+  // Download images/videos and save locally + embed as base64 for Claude Desktop
+  const savedPaths = [];
   for (const url of urls) {
-    if (/\.(png|jpg|jpeg|webp|gif)(\?|$)/i.test(url)) {
-      content.push({ type: 'image', data: url, mimeType: 'image/png' });
+    const isImage = /\.(png|jpg|jpeg|webp|gif)(\?|$)/i.test(url);
+    const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(url);
+
+    if (!isImage && !isVideo) continue;
+
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const buf = Buffer.from(await resp.arrayBuffer());
+
+      // Determine extension and build a temp file path
+      const ext = isImage
+        ? (url.match(/\.(png|jpg|jpeg|webp|gif)/i)?.[1]?.toLowerCase() || 'png')
+        : (url.match(/\.(mp4|webm|mov)/i)?.[1]?.toLowerCase() || 'mp4');
+
+      // Save to ~/Downloads/sogni/ so the user can find it easily
+      const { mkdirSync, writeFileSync } = await import('fs');
+      const downloadsDir = join(homedir(), 'Downloads', 'sogni');
+      mkdirSync(downloadsDir, { recursive: true });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `sogni-${timestamp}-${savedPaths.length}.${ext}`;
+      const filePath = join(downloadsDir, filename);
+      writeFileSync(filePath, buf);
+      savedPaths.push(filePath);
+
+      // For images, embed as base64 (Claude Desktop can render these inline)
+      if (isImage) {
+        const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+          : ext === 'webp' ? 'image/webp'
+          : ext === 'gif' ? 'image/gif'
+          : 'image/png';
+        content.push({ type: 'image', data: buf.toString('base64'), mimeType });
+      }
+    } catch {
+      // If download fails, skip — the URL is still in the text above
     }
+  }
+
+  // Append saved file paths to the text output
+  if (savedPaths.length > 0) {
+    const textBlock = content[0];
+    textBlock.text += '\n\n' + savedPaths.map((p, i) =>
+      savedPaths.length === 1 ? `📁 Saved: ${p}` : `📁 Saved #${i + 1}: ${p}`
+    ).join('\n');
   }
 
   return { content };
@@ -161,7 +203,7 @@ function formatError(result) {
   return { content: [{ type: 'text', text: parts.join('\n') }], isError: true };
 }
 
-function formatResult(result) {
+async function formatResult(result) {
   if (result.success === false) return formatError(result);
   return formatSuccess(result);
 }

@@ -144,24 +144,56 @@ async function formatSuccess(result) {
 
   const content = [{ type: 'text', text: parts.join('\n') }];
 
-  // Download images and include as Base64-encoded content so Claude can see them
+  // Download images/videos and save locally + embed as base64 for MCP clients
+  // that support inline image rendering (e.g. Claude Desktop).
+  // For Claude Code (terminal), the saved file path is the primary way to view results.
+  const savedPaths = [];
   for (const url of urls) {
-    if (/\.(png|jpg|jpeg|webp|gif)(\?|$)/i.test(url)) {
-      try {
-        const resp = await fetch(url);
-        if (resp.ok) {
-          const buf = Buffer.from(await resp.arrayBuffer());
-          const ext = url.match(/\.(png|jpg|jpeg|webp|gif)/i)?.[1]?.toLowerCase() || 'png';
-          const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
-            : ext === 'webp' ? 'image/webp'
-            : ext === 'gif' ? 'image/gif'
-            : 'image/png';
-          content.push({ type: 'image', data: buf.toString('base64'), mimeType });
-        }
-      } catch {
-        // If download fails, skip embedding — the URL is still in the text
+    const isImage = /\.(png|jpg|jpeg|webp|gif)(\?|$)/i.test(url);
+    const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(url);
+
+    if (!isImage && !isVideo) continue;
+
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const buf = Buffer.from(await resp.arrayBuffer());
+
+      // Determine extension and build a temp file path
+      const ext = isImage
+        ? (url.match(/\.(png|jpg|jpeg|webp|gif)/i)?.[1]?.toLowerCase() || 'png')
+        : (url.match(/\.(mp4|webm|mov)/i)?.[1]?.toLowerCase() || 'mp4');
+
+      // Save to ~/Downloads/sogni/ so the user can find it easily
+      const { mkdirSync, writeFileSync } = await import('fs');
+      const downloadsDir = join(homedir(), 'Downloads', 'sogni');
+      mkdirSync(downloadsDir, { recursive: true });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `sogni-${timestamp}-${savedPaths.length}.${ext}`;
+      const filePath = join(downloadsDir, filename);
+      writeFileSync(filePath, buf);
+      savedPaths.push(filePath);
+
+      // For images, also embed as base64 (Claude Desktop can render these)
+      if (isImage) {
+        const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+          : ext === 'webp' ? 'image/webp'
+          : ext === 'gif' ? 'image/gif'
+          : 'image/png';
+        content.push({ type: 'image', data: buf.toString('base64'), mimeType });
       }
+    } catch {
+      // If download fails, skip — the URL is still in the text above
     }
+  }
+
+  // Append saved file paths to the text output so Claude Code users can see/open them
+  if (savedPaths.length > 0) {
+    const textBlock = content[0];
+    textBlock.text += '\n\n' + savedPaths.map((p, i) =>
+      savedPaths.length === 1 ? `📁 Saved: ${p}` : `📁 Saved #${i + 1}: ${p}`
+    ).join('\n');
+    textBlock.text += '\n\nTip: In Claude Code, ask Claude to run `open <path>` to view the file.';
   }
 
   return { content };
