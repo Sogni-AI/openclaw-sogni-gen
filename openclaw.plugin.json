@@ -2,7 +2,7 @@
   "id": "sogni-gen",
   "name": "Sogni Image & Video Generation",
   "description": "Generate images and videos using Sogni AI via the sogni-gen skill.",
-  "version": "1.0.1",
+  "version": "1.3.4",
   "skills": [
     "."
   ],
@@ -19,6 +19,11 @@
         "type": "string",
         "default": "qwen_image_edit_2511_fp8_lightning",
         "description": "Default model for image editing when context images are provided."
+      },
+      "defaultPhotoboothModel": {
+        "type": "string",
+        "default": "coreml-sogniXLturbo_alpha1_ad",
+        "description": "Default model for photobooth face transfer."
       },
       "videoModels": {
         "type": "object",

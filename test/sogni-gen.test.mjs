@@ -5,7 +5,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const MIN_NODE_VERSION = [22, 22, 0];
+const MIN_NODE_VERSION = [22, 11, 0];
 
 function isVersionAtLeast(current, required) {
   for (let i = 0; i < required.length; i++) {
@@ -66,6 +66,17 @@ function runCli(args) {
   };
 }
 
+function expectCliError(args, messageIncludes) {
+  const { exitCode, stderr } = runCli(args);
+  assert.equal(exitCode, 1);
+  if (messageIncludes) {
+    assert.ok(
+      stderr.includes(messageIncludes),
+      `Expected stderr to include "${messageIncludes}", got: ${stderr}`
+    );
+  }
+}
+
 test('default image generation uses 512x512 and prompt', () => {
   const { exitCode, state } = runCli(['a cat wearing a hat']);
   assert.equal(exitCode, 0);
@@ -75,6 +86,96 @@ test('default image generation uses 512x512 and prompt', () => {
   assert.equal(state.lastImageProject.positivePrompt, 'a cat wearing a hat');
   assert.equal(state.lastImageProject.tokenType, 'spark');
   assert.equal(state.lastImageProject.sizePreset, 'custom');
+});
+
+test('unknown CLI flag returns a validation error', () => {
+  const { exitCode, stderr } = runCli(['--not-a-real-flag', 'a cat wearing a hat']);
+  assert.equal(exitCode, 1);
+  assert.ok(stderr.includes('Unknown option: --not-a-real-flag'));
+});
+
+test('invalid width returns a validation error', () => {
+  const { exitCode, stderr } = runCli(['--width', 'foo', 'a cat wearing a hat']);
+  assert.equal(exitCode, 1);
+  assert.ok(stderr.includes('--width must be an integer.'));
+});
+
+test('invalid seed returns a validation error', () => {
+  const { exitCode, stderr } = runCli(['--seed', 'foo', 'a cat wearing a hat']);
+  assert.equal(exitCode, 1);
+  assert.ok(stderr.includes('--seed must be an integer.'));
+});
+
+test('missing required value for --width returns a validation error', () => {
+  expectCliError(['--width'], '--width requires a value.');
+});
+
+test('out-of-range seed returns a validation error', () => {
+  expectCliError(['--seed', '4294967296', 'a cat'], '--seed must be between 0 and 4294967295.');
+});
+
+test('invalid token type returns a validation error', () => {
+  expectCliError(['--token-type', 'gold', 'a cat'], '--token-type must be "spark" or "sogni".');
+});
+
+test('invalid seed strategy returns a validation error', () => {
+  expectCliError(['--seed-strategy', 'foo', 'a cat'], '--seed-strategy must be "random" or "prompt-hash".');
+});
+
+test('invalid image output format returns a validation error', () => {
+  expectCliError(['--output-format', 'webp', 'a cat'], 'Image output format must be "png" or "jpg".');
+});
+
+test('invalid video output format returns a validation error', () => {
+  expectCliError(['--video', '--output-format', 'jpg', 'a cat'], 'Video output format must be "mp4".');
+});
+
+test('video-only options without --video return a validation error', () => {
+  expectCliError(['--workflow', 'i2v', 'a cat'], 'Video-only options');
+});
+
+test('t2v rejects reference assets', () => {
+  expectCliError(['--video', '--workflow', 't2v', '--ref', 'screenshot.jpg', 'a cat'], 't2v does not accept reference image/audio/video.');
+});
+
+test('i2v requires ref and/or ref-end', () => {
+  expectCliError(['--video', '--workflow', 'i2v', 'a cat'], 'i2v requires --ref and/or --ref-end.');
+});
+
+test('s2v requires both ref and ref-audio', () => {
+  expectCliError(['--video', '--workflow', 's2v', '--ref', 'screenshot.jpg', 'a cat'], 's2v requires both --ref and --ref-audio.');
+});
+
+test('looping is only supported with i2v workflow', () => {
+  expectCliError(['--video', '--workflow', 't2v', '--looping', 'a cat'], '--looping is only supported with i2v workflow.');
+});
+
+test('photobooth requires ref image', () => {
+  expectCliError(['--photobooth', 'portrait'], '--photobooth requires --ref <face-image>.');
+});
+
+test('photobooth cannot be combined with video', () => {
+  expectCliError(['--photobooth', '--video', '--ref', 'screenshot.jpg', 'portrait'], '--photobooth cannot be combined with --video.');
+});
+
+test('video rejects lora options', () => {
+  expectCliError(['--video', '--lora', 'foo', 'a cat'], '--lora options are image-only.');
+});
+
+test('video rejects sampler/scheduler options', () => {
+  expectCliError(['--video', '--sampler', 'euler', 'a cat'], '--sampler/--scheduler are image-only options.');
+});
+
+test('non-video rejects auto-resize-assets', () => {
+  expectCliError(['--auto-resize-assets', 'a cat'], '--auto-resize-assets is only valid with --video.');
+});
+
+test('estimate-video-cost requires --video', () => {
+  expectCliError(['--estimate-video-cost', 'a cat'], '--estimate-video-cost requires --video.');
+});
+
+test('unknown workflow returns a validation error', () => {
+  expectCliError(['--video', '--workflow', 'foo', 'a cat'], 'Unknown workflow "foo".');
 });
 
 test('--version returns current package version', () => {
@@ -167,6 +268,24 @@ test('json error: i2v rejects mismatched explicit size and suggests a compatible
   assert.equal(payload.success, false);
   assert.equal(payload.errorCode, 'INVALID_VIDEO_SIZE');
   assert.ok(String(payload.hint || '').includes('--width 608 --height 624'));
+});
+
+test('json error: i2v validates --ref-end sizing with strict-size', () => {
+  const { exitCode, stdout } = runCli([
+    '--json',
+    '--strict-size',
+    '--video',
+    '--workflow', 'i2v',
+    '--ref-end', 'screenshot.jpg',
+    '--width', '512',
+    '--height', '512',
+    'gentle camera pan'
+  ]);
+  assert.equal(exitCode, 1);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, false);
+  assert.equal(payload.errorCode, 'INVALID_VIDEO_SIZE');
+  assert.equal(payload.errorDetails.referenceType, 'refImageEnd');
 });
 
 test('i2v auto-adjust handles near-matching aspects that still round to a non-16 dimension', async () => {

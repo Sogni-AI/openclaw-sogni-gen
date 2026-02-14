@@ -179,6 +179,50 @@ function parseNumberList(raw, flagName) {
   return entries.map((entry) => parseNumberValue(entry, flagName));
 }
 
+function requireFlagValue(argv, index, flagName) {
+  const value = argv[index + 1];
+  if (value === undefined) {
+    fatalCliError(`${flagName} requires a value.`, {
+      code: 'INVALID_ARGUMENT',
+      details: { flag: flagName }
+    });
+  }
+  return value;
+}
+
+function parseIntegerValue(raw, flagName) {
+  const num = Number(raw);
+  if (!Number.isInteger(num)) {
+    fatalCliError(`${flagName} must be an integer.`, {
+      code: 'INVALID_ARGUMENT',
+      details: { flag: flagName, value: raw }
+    });
+  }
+  return num;
+}
+
+function parsePositiveIntegerValue(raw, flagName, min = 1) {
+  const num = parseIntegerValue(raw, flagName);
+  if (num < min) {
+    fatalCliError(`${flagName} must be >= ${min}.`, {
+      code: 'INVALID_ARGUMENT',
+      details: { flag: flagName, value: raw, min }
+    });
+  }
+  return num;
+}
+
+function parseSeedValue(raw, flagName) {
+  const num = parseIntegerValue(raw, flagName);
+  if (num < 0 || num > 0xFFFFFFFF) {
+    fatalCliError(`${flagName} must be between 0 and 4294967295.`, {
+      code: 'INVALID_ARGUMENT',
+      details: { flag: flagName, value: raw }
+    });
+  }
+  return num;
+}
+
 function getModelDefaults(modelId, config) {
   if (!modelId || !config?.modelDefaults) return null;
   const entry = config.modelDefaults[modelId];
@@ -638,11 +682,13 @@ const cliSet = {
   frames: false,
   autoResizeVideoAssets: false,
   angles360Video: false,
+  videoModel: false,
   refImage: false,
   refImageEnd: false,
   refAudio: false,
   refVideo: false,
   context: false,
+  looping: false,
   photobooth: false,
   cnStrength: false,
   cnGuidanceEnd: false
@@ -652,40 +698,64 @@ const cliSet = {
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
   if (arg === '-o' || arg === '--output') {
-    options.output = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.output = raw;
     cliSet.output = true;
   } else if (arg === '-m' || arg === '--model') {
-    options.model = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.model = raw;
     cliSet.model = true;
   } else if (arg === '-w' || arg === '--width') {
-    options.width = parseInt(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.width = parsePositiveIntegerValue(raw, arg);
     cliSet.width = true;
   } else if (arg === '-h' || arg === '--height') {
-    options.height = parseInt(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.height = parsePositiveIntegerValue(raw, arg);
     cliSet.height = true;
   } else if (arg === '-n' || arg === '--count') {
-    options.count = parseInt(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.count = parsePositiveIntegerValue(raw, arg);
     cliSet.count = true;
   } else if (arg === '-t' || arg === '--timeout') {
-    options.timeout = parseInt(args[++i]) * 1000;
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.timeout = parsePositiveIntegerValue(raw, arg) * 1000;
     cliSet.timeout = true;
   } else if (arg === '--token-type' || arg === '--token') {
-    options.tokenType = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.tokenType = raw;
     cliSet.tokenType = true;
   } else if (arg === '--steps') {
-    options.steps = parseInt(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.steps = parsePositiveIntegerValue(raw, arg);
     cliSet.steps = true;
   } else if (arg === '--guidance') {
-    options.guidance = parseFloat(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.guidance = parseNumberValue(raw, arg);
     cliSet.guidance = true;
   } else if (arg === '--output-format' || arg === '--format') {
-    options.outputFormat = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.outputFormat = raw;
     cliSet.outputFormat = true;
   } else if (arg === '--sampler') {
-    options.sampler = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.sampler = raw;
     cliSet.sampler = true;
   } else if (arg === '--scheduler') {
-    options.scheduler = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.scheduler = raw;
     cliSet.scheduler = true;
   } else if (arg === '--multi-angle' || arg === '--multiple-angles') {
     options.multiAngle = true;
@@ -701,40 +771,64 @@ for (let i = 0; i < args.length; i++) {
       options.angles360Video = args[++i];
     }
   } else if (arg === '--video-model' || arg === '--i2v-model') {
-    options.videoModel = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.videoModel = raw;
     cliSet.videoModel = true;
   } else if (arg === '--azimuth') {
-    options.azimuth = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.azimuth = raw;
     cliSet.azimuth = true;
   } else if (arg === '--elevation') {
-    options.elevation = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.elevation = raw;
     cliSet.elevation = true;
   } else if (arg === '--distance') {
-    options.distance = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.distance = raw;
     cliSet.distance = true;
   } else if (arg === '--angle-strength' || arg === '--strength') {
-    options.angleStrength = parseNumberValue(args[++i], '--angle-strength');
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.angleStrength = parseNumberValue(raw, arg);
     cliSet.angleStrength = true;
   } else if (arg === '--angle-description' || arg === '--angle-anchor' || arg === '--description' || arg === '--anchor') {
-    options.angleDescription = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.angleDescription = raw;
     cliSet.angleDescription = true;
   } else if (arg === '--lora' || arg === '--lora-model') {
-    options.loras.push(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.loras.push(raw);
     cliSet.loras = true;
   } else if (arg === '--loras') {
-    options.loras.push(...parseCsv(args[++i]));
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.loras.push(...parseCsv(raw));
     cliSet.loras = true;
   } else if (arg === '--lora-strength') {
-    options.loraStrengths.push(parseNumberValue(args[++i], '--lora-strength'));
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.loraStrengths.push(parseNumberValue(raw, arg));
     cliSet.loraStrengths = true;
   } else if (arg === '--lora-strengths') {
-    options.loraStrengths.push(...parseNumberList(args[++i], '--lora-strengths'));
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.loraStrengths.push(...parseNumberList(raw, arg));
     cliSet.loraStrengths = true;
   } else if (arg === '-s' || arg === '--seed') {
-    options.seed = parseInt(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.seed = parseSeedValue(raw, arg);
     cliSet.seed = true;
   } else if (arg === '--seed-strategy') {
-    options.seedStrategy = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.seedStrategy = raw;
     cliSet.seedStrategy = true;
   } else if (arg === '--last-seed' || arg === '--reseed') {
     options.lastSeed = true;
@@ -742,16 +836,24 @@ for (let i = 0; i < args.length; i++) {
     options.video = true;
     cliSet.video = true;
   } else if (arg === '--workflow') {
-    options.videoWorkflow = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.videoWorkflow = raw;
     cliSet.workflow = true;
   } else if (arg === '--fps') {
-    options.fps = parseInt(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.fps = parsePositiveIntegerValue(raw, arg);
     cliSet.fps = true;
   } else if (arg === '--duration') {
-    options.duration = parseInt(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.duration = parsePositiveIntegerValue(raw, arg);
     cliSet.duration = true;
   } else if (arg === '--frames') {
-    options.frames = parseInt(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.frames = parsePositiveIntegerValue(raw, arg);
     cliSet.frames = true;
   } else if (arg === '--auto-resize-assets') {
     options.autoResizeVideoAssets = true;
@@ -760,31 +862,45 @@ for (let i = 0; i < args.length; i++) {
     options.autoResizeVideoAssets = false;
     cliSet.autoResizeVideoAssets = true;
   } else if (arg === '--ref' || arg === '--reference') {
-    options.refImage = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.refImage = raw;
     cliSet.refImage = true;
   } else if (arg === '--ref-end' || arg === '--end') {
-    options.refImageEnd = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.refImageEnd = raw;
     cliSet.refImageEnd = true;
   } else if (arg === '--ref-audio' || arg === '--audio') {
-    options.refAudio = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.refAudio = raw;
     cliSet.refAudio = true;
   } else if (arg === '--ref-video') {
-    options.refVideo = args[++i];
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.refVideo = raw;
     cliSet.refVideo = true;
   } else if (arg === '--looping' || arg === '--loop') {
     options.looping = true;
     cliSet.looping = true;
   } else if (arg === '-c' || arg === '--context') {
-    options.contextImages.push(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.contextImages.push(raw);
     cliSet.context = true;
   } else if (arg === '--photobooth') {
     options.photobooth = true;
     cliSet.photobooth = true;
   } else if (arg === '--cn-strength') {
-    options.cnStrength = parseFloat(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.cnStrength = parseNumberValue(raw, arg);
     cliSet.cnStrength = true;
   } else if (arg === '--cn-guidance-end') {
-    options.cnGuidanceEnd = parseFloat(args[++i]);
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.cnGuidanceEnd = parseNumberValue(raw, arg);
     cliSet.cnGuidanceEnd = true;
   } else if (arg === '--last-image') {
     // Use image from last render as reference/context
@@ -922,7 +1038,17 @@ Examples:
   sogni-gen --photobooth --ref face.jpg -n 4 "LinkedIn professional headshot"
 `);
     process.exit(0);
-  } else if (!arg.startsWith('-') && !options.prompt) {
+  } else if (arg === '--') {
+    if (!options.prompt && args[i + 1] !== undefined) {
+      options.prompt = args[i + 1];
+    }
+    break;
+  } else if (arg.startsWith('-')) {
+    fatalCliError(`Unknown option: ${arg}`, {
+      code: 'INVALID_ARGUMENT',
+      hint: 'Use --help to see supported options.'
+    });
+  } else if (!options.prompt) {
     options.prompt = arg;
   }
 }
@@ -1305,126 +1431,124 @@ if (options.video) {
     );
   }
 
-  if (
-    options.videoWorkflow === 'i2v' &&
-    (options.refImage || options.refImageEnd) &&
-    !isHttpUrl(options.refImage || options.refImageEnd)
-  ) {
-    const refPath = options.refImage || options.refImageEnd;
-    if (refPath && existsSync(refPath)) {
-      const buffer = readFileSync(refPath);
-      const dims = getImageDimensionsFromBuffer(buffer);
-      if (dims?.width && dims?.height) {
-        const predicted = predictSharpInsideResizeDims(dims.width, dims.height, options.width, options.height);
-        if (predicted) {
-          options._effectiveVideoDims = {
-            width: predicted.width,
-            height: predicted.height,
-            refWidth: dims.width,
-            refHeight: dims.height,
-            requestedWidth: options.width,
-            requestedHeight: options.height
-          };
-        }
-
-        // Check if we need to find a better bounding box for i2v:
-        // - Output not divisible by 16, OR
-        // - Either dimension below MIN_VIDEO_DIMENSION (480)
-        const needsBetterBox = predicted && (
-          predicted.width % VIDEO_DIMENSION_MULTIPLE !== 0 ||
-          predicted.height % VIDEO_DIMENSION_MULTIPLE !== 0 ||
-          predicted.width < MIN_VIDEO_DIMENSION ||
-          predicted.height < MIN_VIDEO_DIMENSION
-        );
-
-        if (needsBetterBox) {
-          // Try to find a compatible bounding box (allow imperfect matches for better portrait/landscape support)
-          let candidate = pickCompatibleI2vBoundingBox(dims.width, dims.height, options.width, options.height, { allowImperfect: true });
-          if (!candidate) {
-            // No compatible match found - will need to pre-resize the reference image
-            options._needsRefResize = true;
-            if (!options.quiet) {
-              console.error(
-                `Reference image ${dims.width}x${dims.height} will be pre-resized to div-16 dimensions ` +
-                `because no compatible bounding box exists for i2v workflow.`
-              );
-            }
-            // Continue without adjusting bounding box - the pre-resized reference will work with current dims
-          } else if (!cliSet.width && !cliSet.height) {
-            const before = `${options.width}x${options.height}`;
-            options.width = candidate.width;
-            options.height = candidate.height;
-            const predicted2 = predictSharpInsideResizeDims(dims.width, dims.height, options.width, options.height);
-            if (predicted2) {
-              options._effectiveVideoDims = {
-                width: predicted2.width,
-                height: predicted2.height,
-                refWidth: dims.width,
-                refHeight: dims.height,
-                requestedWidth: options.width,
-                requestedHeight: options.height
-              };
-            }
-            options._adjustedVideoDims = {
-              reason: 'i2v-ref-div16',
-              requested: { width: originalVideoWidth, height: originalVideoHeight },
-              adjusted: { width: options.width, height: options.height },
-              resizedFrom: predicted,
-              resizedTo: predicted2 || null
-            };
-            if (!options.quiet) {
-              console.error(
-                `Auto-adjusted i2v video size from ${before} to ${options.width}x${options.height} ` +
-                `so the resized reference is divisible by 16 (would have been ${predicted.width}x${predicted.height}).`
-              );
-            }
-          } else if (candidate && options.strictSize) {
-            fatalCliError(
-              `Reference image ${dims.width}x${dims.height} would resize to ${predicted.width}x${predicted.height}, ` +
-              `but both dimensions must be divisible by 16.`,
-              {
-                code: 'INVALID_VIDEO_SIZE',
-                details: {
-                  reference: { width: dims.width, height: dims.height },
-                  requested: { width: options.width, height: options.height },
-                  resized: predicted
-                },
-                hint: `Try: --width ${candidate.width} --height ${candidate.height} (or omit --strict-size)`
-              }
-            );
-          } else if (candidate) {
-            const beforeW = options.width;
-            const beforeH = options.height;
-            options.width = candidate.width;
-            options.height = candidate.height;
-            const predicted2 = predictSharpInsideResizeDims(dims.width, dims.height, options.width, options.height);
-            if (predicted2) {
-              options._effectiveVideoDims = {
-                width: predicted2.width,
-                height: predicted2.height,
-                refWidth: dims.width,
-                refHeight: dims.height,
-                requestedWidth: options.width,
-                requestedHeight: options.height
-              };
-            }
-            options._adjustedVideoDims = {
-              reason: 'i2v-ref-div16',
-              requested: { width: beforeW, height: beforeH },
-              adjusted: { width: options.width, height: options.height },
-              resizedFrom: predicted,
-              resizedTo: predicted2 || null
-            };
-            if (!options.quiet) {
-              console.error(
-                `Warning: Adjusted i2v video size from ${beforeW}x${beforeH} to ${options.width}x${options.height} ` +
-                `because the resized reference would be ${predicted.width}x${predicted.height} (not divisible by 16). ` +
-                `Use --strict-size to fail instead.`
-              );
-            }
-          }
-        }
+  if (options.videoWorkflow === 'i2v' && (options.refImage || options.refImageEnd)) {
+    const references = [
+      {
+        key: 'refImage',
+        path: options.refImage,
+        label: 'Reference image',
+        resizeFlag: '_needsRefResize'
+      },
+      {
+        key: 'refImageEnd',
+        path: options.refImageEnd,
+        label: 'End reference image',
+        resizeFlag: '_needsRefEndResize'
       }
+    ];
+    const localRefDims = new Map();
+
+    const isIncompatible = (predicted) => Boolean(predicted) && (
+      predicted.width % VIDEO_DIMENSION_MULTIPLE !== 0 ||
+      predicted.height % VIDEO_DIMENSION_MULTIPLE !== 0 ||
+      predicted.width < MIN_VIDEO_DIMENSION ||
+      predicted.height < MIN_VIDEO_DIMENSION
+    );
+
+    for (const ref of references) {
+      if (!ref.path || isHttpUrl(ref.path) || !existsSync(ref.path)) continue;
+      const buffer = readFileSync(ref.path);
+      const dims = getImageDimensionsFromBuffer(buffer);
+      if (!dims?.width || !dims?.height) continue;
+      localRefDims.set(ref.key, dims);
+
+      const predicted = predictSharpInsideResizeDims(dims.width, dims.height, options.width, options.height);
+      if (!isIncompatible(predicted)) continue;
+
+      const candidate = pickCompatibleI2vBoundingBox(dims.width, dims.height, options.width, options.height, { allowImperfect: true });
+      if (!candidate) {
+        options[ref.resizeFlag] = true;
+        if (!options.quiet) {
+          console.error(
+            `${ref.label} ${dims.width}x${dims.height} will be pre-resized to div-16 dimensions ` +
+            'because no compatible bounding box exists for i2v workflow.'
+          );
+        }
+        continue;
+      }
+
+      if ((cliSet.width || cliSet.height) && options.strictSize) {
+        fatalCliError(
+          `${ref.label} ${dims.width}x${dims.height} would resize to ${predicted.width}x${predicted.height}, ` +
+          'but both dimensions must be divisible by 16.',
+          {
+            code: 'INVALID_VIDEO_SIZE',
+            details: {
+              referenceType: ref.key,
+              referencePath: ref.path,
+              reference: { width: dims.width, height: dims.height },
+              requested: { width: options.width, height: options.height },
+              resized: predicted
+            },
+            hint: `Try: --width ${candidate.width} --height ${candidate.height} (or omit --strict-size)`
+          }
+        );
+      }
+
+      const beforeW = options.width;
+      const beforeH = options.height;
+      options.width = candidate.width;
+      options.height = candidate.height;
+
+      const predictedAfter = predictSharpInsideResizeDims(dims.width, dims.height, options.width, options.height);
+      options._adjustedVideoDims = {
+        reason: 'i2v-ref-div16',
+        referenceType: ref.key,
+        requested: { width: beforeW, height: beforeH },
+        adjusted: { width: options.width, height: options.height },
+        resizedFrom: predicted,
+        resizedTo: predictedAfter || null
+      };
+      if (!options.quiet) {
+        const mode = cliSet.width || cliSet.height ? 'Warning: Adjusted' : 'Auto-adjusted';
+        console.error(
+          `${mode} i2v video size from ${beforeW}x${beforeH} to ${options.width}x${options.height} ` +
+          `because resized reference would be ${predicted.width}x${predicted.height}.`
+        );
+      }
+    }
+
+    for (const ref of references) {
+      const dims = localRefDims.get(ref.key);
+      if (!dims) continue;
+      const predicted = predictSharpInsideResizeDims(dims.width, dims.height, options.width, options.height);
+      if (isIncompatible(predicted)) {
+        options[ref.resizeFlag] = true;
+      }
+    }
+
+    const effectiveDimsSource = localRefDims.get('refImage') || localRefDims.get('refImageEnd') || null;
+    if (effectiveDimsSource) {
+      const predicted = predictSharpInsideResizeDims(
+        effectiveDimsSource.width,
+        effectiveDimsSource.height,
+        options.width,
+        options.height
+      );
+      if (predicted) {
+        options._effectiveVideoDims = {
+          width: predicted.width,
+          height: predicted.height,
+          refWidth: effectiveDimsSource.width,
+          refHeight: effectiveDimsSource.height,
+          requestedWidth: options.width,
+          requestedHeight: options.height
+        };
+      }
+    }
+
+    if ((options._needsRefResize || options._needsRefEndResize) && !options.quiet) {
+      console.error('One or more i2v references require pre-resize to ensure div-16 compatibility.');
     }
   }
 }
@@ -2675,7 +2799,7 @@ async function main() {
             stylePrompt: '',
             numberOfMedia: 1,
             referenceImage: readFileSync(lastFramePath),
-            referenceImageEnd: readFileSync(options.refImage),
+            referenceImageEnd: imageBuffer,
             fps: options.fps,
             width: options.width,
             height: options.height,
@@ -2684,7 +2808,7 @@ async function main() {
             disableNSFWFilter: true
           };
 
-          if (options.frames) projectConfig2.numberOfFrames = options.frames;
+          if (options.frames) projectConfig2.frames = options.frames;
           else if (options.duration) projectConfig2.duration = options.duration;
           if (Number.isFinite(steps2)) projectConfig2.steps = steps2;
           if (guidance2 !== null && guidance2 !== undefined) projectConfig2.guidance = guidance2;

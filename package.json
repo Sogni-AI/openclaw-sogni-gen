@@ -1,6 +1,6 @@
 {
   "name": "sogni-gen",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Sogni AI image & video generation — OpenClaw plugin and MCP server for Claude Code / Claude Desktop",
   "type": "module",
   "main": "sogni-gen.mjs",
@@ -10,7 +10,9 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs test/*.integration.mjs",
-    "test:integration": "node --test test/*.integration.mjs"
+    "test:integration": "node --test test/*.integration.mjs",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=sogni-gen.mjs --test-coverage-lines=50 --test-coverage-branches=35 --test-coverage-functions=50 test/sogni-gen.test.mjs",
+    "test:coverage:full": "node --test --experimental-test-coverage --test-coverage-include=sogni-gen.mjs --test-coverage-lines=50 --test-coverage-branches=35 --test-coverage-functions=50 test/*.test.mjs test/*.integration.mjs"
   },
   "keywords": [
     "sogni",
@@ -26,12 +28,28 @@
   "author": "Mauvis Ledford",
   "license": "MIT",
   "engines": {
-    "node": ">=22.22.0"
+    "node": ">=22.11.0"
   },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "SKILL.md",
+    "llm.txt",
+    "openclaw-plugin.mjs",
+    "openclaw.plugin.json",
+    "mcp-server.mjs",
+    "sogni-gen.mjs",
+    "Support/Claude/claude_desktop_config.json",
+    "desktop-extension/manifest.json",
+    "desktop-extension/server/mcp-server.mjs",
+    "desktop-extension/server/sogni-gen.mjs",
+    "desktop-extension/server/package.json"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@sogni-ai/sogni-client-wrapper": "^1.4.2",
-    "json5": "^2.2.3"
+    "json5": "^2.2.3",
+    "sharp": "^0.34.5"
   },
   "openclaw": {
     "extensions": [
