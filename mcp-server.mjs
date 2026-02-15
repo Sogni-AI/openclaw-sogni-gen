@@ -39,6 +39,38 @@ const SERVER_VERSION = (() => {
 })();
 
 // ---------------------------------------------------------------------------
+// Input sanitization — validate MCP tool inputs before passing to CLI
+// ---------------------------------------------------------------------------
+
+/**
+ * Reject null bytes and control characters in a string value.
+ * Throws on invalid input; returns the string unchanged when valid.
+ */
+function sanitizeString(value, label) {
+  if (typeof value !== 'string') {
+    throw new Error(`${label || 'Value'} must be a string.`);
+  }
+  if (value.includes('\0')) {
+    throw new Error(`${label || 'Value'} contains a null byte.`);
+  }
+  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value)) {
+    throw new Error(`${label || 'Value'} contains invalid control characters.`);
+  }
+  return value;
+}
+
+/**
+ * Validate a string is one of the allowed values (case-sensitive).
+ */
+function validateEnum(value, allowed, label) {
+  sanitizeString(value, label);
+  if (!allowed.includes(value)) {
+    throw new Error(`${label || 'Value'} must be one of: ${allowed.join(', ')}`);
+  }
+  return value;
+}
+
+// ---------------------------------------------------------------------------
 // CLI spawning helper
 // ---------------------------------------------------------------------------
 
@@ -555,69 +587,80 @@ The face likeness is preserved while applying the style from the prompt.`,
 // ---------------------------------------------------------------------------
 
 async function handleGenerateImage(params) {
-  const args = [params.prompt];
-  if (params.model) args.push('-m', params.model);
+  sanitizeString(params.prompt, 'prompt');
+  const args = [];
+  if (params.model) args.push('-m', sanitizeString(params.model, 'model'));
   if (params.width) args.push('-w', String(params.width));
   if (params.height) args.push('-h', String(params.height));
   if (params.count) args.push('-n', String(params.count));
   if (params.seed != null) args.push('-s', String(params.seed));
-  if (params.output) args.push('-o', params.output);
-  if (params.output_format) args.push('--output-format', params.output_format);
-  if (params.loras?.length) args.push('--loras', params.loras.join(','));
+  if (params.output) args.push('-o', sanitizeString(params.output, 'output'));
+  if (params.output_format) args.push('--output-format', validateEnum(params.output_format, ['png', 'jpg'], 'output_format'));
+  if (params.loras?.length) {
+    params.loras.forEach((l, i) => sanitizeString(l, `loras[${i}]`));
+    args.push('--loras', params.loras.join(','));
+  }
   if (params.lora_strengths?.length) args.push('--lora-strengths', params.lora_strengths.join(','));
+  args.push('--', params.prompt);
 
   return runAndFormat(args, { timeoutMs: 60_000 });
 }
 
 async function handleGenerateVideo(params) {
-  const args = ['--video', params.prompt];
-  if (params.workflow) args.push('--workflow', params.workflow);
-  if (params.model) args.push('-m', params.model);
+  sanitizeString(params.prompt, 'prompt');
+  const args = ['--video'];
+  if (params.workflow) args.push('--workflow', validateEnum(params.workflow, ['t2v', 'i2v', 's2v', 'v2v', 'animate-move', 'animate-replace'], 'workflow'));
+  if (params.model) args.push('-m', sanitizeString(params.model, 'model'));
   if (params.width) args.push('-w', String(params.width));
   if (params.height) args.push('-h', String(params.height));
   if (params.fps) args.push('--fps', String(params.fps));
   if (params.duration) args.push('--duration', String(params.duration));
   if (params.frames) args.push('--frames', String(params.frames));
-  if (params.ref) args.push('--ref', params.ref);
-  if (params.ref_end) args.push('--ref-end', params.ref_end);
-  if (params.ref_audio) args.push('--ref-audio', params.ref_audio);
-  if (params.ref_video) args.push('--ref-video', params.ref_video);
-  if (params.controlnet_name) args.push('--controlnet-name', params.controlnet_name);
+  if (params.ref) args.push('--ref', sanitizeString(params.ref, 'ref'));
+  if (params.ref_end) args.push('--ref-end', sanitizeString(params.ref_end, 'ref_end'));
+  if (params.ref_audio) args.push('--ref-audio', sanitizeString(params.ref_audio, 'ref_audio'));
+  if (params.ref_video) args.push('--ref-video', sanitizeString(params.ref_video, 'ref_video'));
+  if (params.controlnet_name) args.push('--controlnet-name', validateEnum(params.controlnet_name, ['canny', 'pose', 'depth', 'detailer'], 'controlnet_name'));
   if (params.controlnet_strength != null) args.push('--controlnet-strength', String(params.controlnet_strength));
-  if (params.sam2_coordinates) args.push('--sam2-coordinates', params.sam2_coordinates);
+  if (params.sam2_coordinates) args.push('--sam2-coordinates', sanitizeString(params.sam2_coordinates, 'sam2_coordinates'));
   if (params.trim_end_frame) args.push('--trim-end-frame');
   if (params.first_frame_strength != null) args.push('--first-frame-strength', String(params.first_frame_strength));
   if (params.last_frame_strength != null) args.push('--last-frame-strength', String(params.last_frame_strength));
   if (params.seed != null) args.push('-s', String(params.seed));
-  if (params.output) args.push('-o', params.output);
+  if (params.output) args.push('-o', sanitizeString(params.output, 'output'));
   if (params.looping) args.push('--looping');
+  args.push('--', params.prompt);
 
   return runAndFormat(args, { timeoutMs: 600_000 });
 }
 
 async function handleEditImage(params) {
+  sanitizeString(params.prompt, 'prompt');
   const args = [];
   for (const img of params.context_images) {
-    args.push('-c', img);
+    args.push('-c', sanitizeString(img, 'context_images'));
   }
-  args.push(params.prompt);
-  if (params.model) args.push('-m', params.model);
+  if (params.model) args.push('-m', sanitizeString(params.model, 'model'));
   if (params.width) args.push('-w', String(params.width));
   if (params.height) args.push('-h', String(params.height));
-  if (params.output) args.push('-o', params.output);
+  if (params.output) args.push('-o', sanitizeString(params.output, 'output'));
+  args.push('--', params.prompt);
 
   return runAndFormat(args, { timeoutMs: 60_000 });
 }
 
 async function handlePhotobooth(params) {
-  const args = ['--photobooth', '--ref', params.reference_face, params.prompt];
-  if (params.model) args.push('-m', params.model);
+  sanitizeString(params.prompt, 'prompt');
+  sanitizeString(params.reference_face, 'reference_face');
+  const args = ['--photobooth', '--ref', params.reference_face];
+  if (params.model) args.push('-m', sanitizeString(params.model, 'model'));
   if (params.cn_strength != null) args.push('--cn-strength', String(params.cn_strength));
   if (params.cn_guidance_end != null) args.push('--cn-guidance-end', String(params.cn_guidance_end));
   if (params.width) args.push('-w', String(params.width));
   if (params.height) args.push('-h', String(params.height));
   if (params.count) args.push('-n', String(params.count));
-  if (params.output) args.push('-o', params.output);
+  if (params.output) args.push('-o', sanitizeString(params.output, 'output'));
+  args.push('--', params.prompt);
 
   return runAndFormat(args, { timeoutMs: 60_000 });
 }

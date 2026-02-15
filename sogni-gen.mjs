@@ -13,6 +13,39 @@ import { join, dirname, basename, extname } from 'path';
 import { homedir, tmpdir } from 'os';
 import sharp from 'sharp';
 
+// ---------------------------------------------------------------------------
+// Path sanitization — defense-in-depth for any value that becomes a file path
+// or process argument.  spawnSync already uses the array form (no shell), so
+// classic shell injection is not possible.  These checks guard against:
+//   • null-byte injection (can truncate paths at the C level)
+//   • control-character injection
+//   • FFMPEG_PATH pointing to a non-ffmpeg binary
+// ---------------------------------------------------------------------------
+
+/**
+ * Reject null bytes and control characters in a path string.
+ * Returns the path unchanged when valid; throws otherwise.
+ */
+function sanitizePath(p, label) {
+  if (typeof p !== 'string') {
+    const err = new Error(`${label || 'Path'} must be a string.`);
+    err.code = 'INVALID_PATH';
+    throw err;
+  }
+  if (p.includes('\0')) {
+    const err = new Error(`${label || 'Path'} contains a null byte.`);
+    err.code = 'INVALID_PATH';
+    throw err;
+  }
+  // Reject ASCII control characters except tab (\x09), newline (\x0a), carriage return (\x0d)
+  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(p)) {
+    const err = new Error(`${label || 'Path'} contains invalid control characters.`);
+    err.code = 'INVALID_PATH';
+    throw err;
+  }
+  return p;
+}
+
 const LAST_RENDER_PATH = join(homedir(), '.config', 'sogni', 'last-render.json');
 const OPENCLAW_CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || join(homedir(), '.openclaw', 'openclaw.json');
 const IS_OPENCLAW_INVOCATION = Boolean(process.env.OPENCLAW_PLUGIN_CONFIG);
@@ -1792,11 +1825,21 @@ function removeClientListener(client, event, handler) {
 
 function ensureFfmpegAvailable() {
   const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
-  const result = spawnSync(ffmpegPath, ['-version'], { stdio: 'ignore' });
+  sanitizePath(ffmpegPath, 'FFMPEG_PATH');
+  const result = spawnSync(ffmpegPath, ['-version'], { stdio: 'pipe' });
   if (result.error || result.status !== 0) {
     const err = new Error('ffmpeg is required to assemble the 360 video.');
     err.code = 'MISSING_FFMPEG';
     err.hint = 'Install ffmpeg or set FFMPEG_PATH to a working ffmpeg binary.';
+    err.details = { ffmpegPath };
+    throw err;
+  }
+  // Verify the binary actually is ffmpeg (not an arbitrary executable)
+  const stdout = result.stdout?.toString() || '';
+  if (!stdout.toLowerCase().includes('ffmpeg')) {
+    const err = new Error('FFMPEG_PATH does not point to an ffmpeg binary.');
+    err.code = 'INVALID_FFMPEG';
+    err.hint = 'Ensure FFMPEG_PATH points to a real ffmpeg installation.';
     err.details = { ffmpegPath };
     throw err;
   }
@@ -1827,6 +1870,8 @@ function isNonEmptyFile(filePath) {
 }
 
 function buildAngles360Video(outputPath, frames, fps) {
+  sanitizePath(outputPath, '--angles-360-video output path');
+  frames.forEach((f, i) => sanitizePath(f, `frame[${i}]`));
   const ffmpegPath = ensureFfmpegAvailable();
   const tempListPath = outputPath.replace(/\.mp4$/i, '') + '.concat.txt';
   const frameDuration = 1 / fps;
@@ -1857,6 +1902,8 @@ function buildAngles360Video(outputPath, frames, fps) {
 }
 
 function extractLastFrameFromVideo(videoPath, outputImagePath) {
+  sanitizePath(videoPath, 'video path');
+  sanitizePath(outputImagePath, 'output image path');
   const ffmpegPath = ensureFfmpegAvailable();
 
   // Extract the last frame by reading through the video with update mode
@@ -1896,6 +1943,8 @@ function extractLastFrameFromVideo(videoPath, outputImagePath) {
 }
 
 function buildConcatVideoFromClips(outputPath, clips) {
+  sanitizePath(outputPath, '--output path');
+  clips.forEach((c, i) => sanitizePath(c, `clip[${i}]`));
   const ffmpegPath = ensureFfmpegAvailable();
   const tempListPath = outputPath.replace(/\.mp4$/i, '') + '.concat.txt';
   const lines = clips.map((clip) => `file '${clip.replace(/'/g, "'\\''")}'`);

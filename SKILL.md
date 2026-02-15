@@ -1,6 +1,6 @@
 ---
 name: sogni-gen
-version: "1.5.1"
+version: "1.5.2"
 description: Generate images **and videos** using Sogni AI's decentralized network. Ask the agent to "draw", "generate", "create an image", or "make a video/animate" from a prompt or reference image.
 homepage: https://sogni.ai
 metadata:
