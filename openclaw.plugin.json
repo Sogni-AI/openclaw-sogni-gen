@@ -112,6 +112,21 @@
         "type": "integer",
         "minimum": 30,
         "default": 300
+      },
+      "credentialsPath": {
+        "type": "string",
+        "default": "~/.config/sogni/credentials",
+        "description": "Optional path to Sogni credentials file (can also set SOGNI_CREDENTIALS_PATH)."
+      },
+      "lastRenderPath": {
+        "type": "string",
+        "default": "~/.config/sogni/last-render.json",
+        "description": "Optional path to persist last render metadata (can also set SOGNI_LAST_RENDER_PATH)."
+      },
+      "mediaInboundDir": {
+        "type": "string",
+        "default": "~/.clawdbot/media/inbound",
+        "description": "Directory used by --list-media (can also set SOGNI_MEDIA_INBOUND_DIR)."
       }
     }
   }

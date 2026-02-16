@@ -22,6 +22,7 @@ if (!isVersionAtLeast(currentNodeVersion, MIN_NODE_VERSION)) {
   throw new Error(`Node >= ${MIN_NODE_VERSION.join('.')} is required. Current: ${process.versions.node}`);
 }
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')).version;
+const SCREENSHOT_FIXTURE = join(process.cwd(), 'docs', 'screenshot.jpg');
 
 function runCli(args) {
   const tempHome = mkdtempSync(join(tmpdir(), 'sogni-gen-test-'));
@@ -225,7 +226,7 @@ test('i2v infers a 16-multiple video size from non-square reference when width/h
   const { exitCode, state } = runCli([
     '--video',
     '--workflow', 'i2v',
-    '--ref', 'screenshot.jpg',
+    '--ref', SCREENSHOT_FIXTURE,
     '--duration', '1',
     'gentle camera pan'
   ]);
@@ -258,7 +259,7 @@ test('json error: i2v rejects mismatched explicit size and suggests a compatible
     '--strict-size',
     '--video',
     '--workflow', 'i2v',
-    '--ref', 'screenshot.jpg',
+    '--ref', SCREENSHOT_FIXTURE,
     '--width', '512',
     '--height', '512',
     'gentle camera pan'
@@ -276,7 +277,7 @@ test('json error: i2v validates --ref-end sizing with strict-size', () => {
     '--strict-size',
     '--video',
     '--workflow', 'i2v',
-    '--ref-end', 'screenshot.jpg',
+    '--ref-end', SCREENSHOT_FIXTURE,
     '--width', '512',
     '--height', '512',
     'gentle camera pan'

@@ -9,7 +9,7 @@ import JSON5 from 'json5';
 import { createHash, randomBytes } from 'crypto';
 import { spawnSync } from 'child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, statSync, readdirSync, realpathSync, lstatSync } from 'fs';
-import { join, dirname, basename, extname } from 'path';
+import { join, dirname, basename, extname, sep } from 'path';
 import { homedir, tmpdir } from 'os';
 import sharp from 'sharp';
 
@@ -46,8 +46,11 @@ function sanitizePath(p, label) {
   return p;
 }
 
-const LAST_RENDER_PATH = join(homedir(), '.config', 'sogni', 'last-render.json');
-const OPENCLAW_CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || join(homedir(), '.openclaw', 'openclaw.json');
+const DEFAULT_CREDENTIALS_PATH = join(homedir(), '.config', 'sogni', 'credentials');
+const DEFAULT_LAST_RENDER_PATH = join(homedir(), '.config', 'sogni', 'last-render.json');
+const DEFAULT_OPENCLAW_CONFIG_PATH = join(homedir(), '.openclaw', 'openclaw.json');
+const DEFAULT_MEDIA_INBOUND_DIR = join(homedir(), '.clawdbot', 'media', 'inbound');
+const OPENCLAW_CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || DEFAULT_OPENCLAW_CONFIG_PATH;
 const IS_OPENCLAW_INVOCATION = Boolean(process.env.OPENCLAW_PLUGIN_CONFIG);
 const RAW_ARGS = process.argv.slice(2);
 const CLI_WANTS_JSON = RAW_ARGS.includes('--json');
@@ -71,6 +74,24 @@ const VIDEO_WORKFLOW_DEFAULT_MODELS = {
 
 function isLtx2Model(modelId) { return modelId?.startsWith('ltx2-') || false; }
 function isWanModel(modelId) { return modelId?.startsWith('wan_') || false; }
+
+function expandHomePath(rawPath) {
+  if (typeof rawPath !== 'string') return rawPath;
+  if (rawPath === '~') return homedir();
+  if (rawPath.startsWith('~/') || rawPath.startsWith('~\\')) {
+    return join(homedir(), rawPath.slice(2));
+  }
+  return rawPath;
+}
+
+function resolveConfiguredPath(rawPath, fallbackPath, label) {
+  const candidate = expandHomePath(rawPath) || fallbackPath;
+  return sanitizePath(candidate, label);
+}
+
+function isPathWithinBase(basePath, targetPath) {
+  return targetPath === basePath || targetPath.startsWith(`${basePath}${sep}`);
+}
 
 function buildCliErrorPayload({ message, code, details, hint, prompt }) {
   const payload = {
@@ -641,6 +662,23 @@ function loadOpenClawPluginConfig() {
   }
 }
 
+const openclawConfig = loadOpenClawPluginConfig();
+const CREDENTIALS_PATH = resolveConfiguredPath(
+  process.env.SOGNI_CREDENTIALS_PATH || openclawConfig?.credentialsPath,
+  DEFAULT_CREDENTIALS_PATH,
+  'SOGNI credentials path'
+);
+const LAST_RENDER_PATH = resolveConfiguredPath(
+  process.env.SOGNI_LAST_RENDER_PATH || openclawConfig?.lastRenderPath,
+  DEFAULT_LAST_RENDER_PATH,
+  'SOGNI last render path'
+);
+const MEDIA_INBOUND_DIR = resolveConfiguredPath(
+  process.env.SOGNI_MEDIA_INBOUND_DIR || openclawConfig?.mediaInboundDir,
+  DEFAULT_MEDIA_INBOUND_DIR,
+  'SOGNI media inbound path'
+);
+
 // Parse arguments
 const args = process.argv.slice(2);
 const options = {
@@ -1197,7 +1235,6 @@ Examples:
   }
 }
 
-const openclawConfig = loadOpenClawPluginConfig();
 let timeoutFromConfig = false;
 if (openclawConfig) {
   const isNumber = (value) => Number.isFinite(value);
@@ -1770,10 +1807,8 @@ if (!options.estimateVideoCost && !options.showVersion && !options.extractLastFr
 
 // Load credentials
 function loadCredentials() {
-  const credPath = join(homedir(), '.config', 'sogni', 'credentials');
-  
-  if (existsSync(credPath)) {
-    const content = readFileSync(credPath, 'utf8');
+  if (existsSync(CREDENTIALS_PATH)) {
+    const content = readFileSync(CREDENTIALS_PATH, 'utf8');
     const creds = {};
     for (const line of content.split('\n')) {
       const [key, val] = line.split('=');
@@ -1793,10 +1828,10 @@ function loadCredentials() {
 
   const err = new Error('No Sogni credentials found.');
   err.code = 'MISSING_CREDENTIALS';
-  err.hint = 'Set SOGNI_USERNAME/SOGNI_PASSWORD or create ~/.config/sogni/credentials.';
+  err.hint = 'Set SOGNI_USERNAME/SOGNI_PASSWORD or configure SOGNI_CREDENTIALS_PATH.';
   err.details = {
     triedEnv: ['SOGNI_USERNAME', 'SOGNI_PASSWORD'],
-    triedFile: credPath
+    triedFile: CREDENTIALS_PATH
   };
   throw err;
 }
@@ -2551,7 +2586,7 @@ async function main() {
 
     if (options.listMedia) {
       const mediaType = options.listMedia;
-      const baseDir = join(homedir(), '.clawdbot', 'media', 'inbound');
+      const baseDir = MEDIA_INBOUND_DIR;
 
       const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
       const AUDIO_EXTS = new Set(['.m4a', '.mp3', '.wav', '.ogg']);
@@ -2563,11 +2598,11 @@ async function main() {
 
       const files = [];
       if (existsSync(baseDir)) {
-        // Validate the base directory itself isn't a symlink pointing outside ~/.clawdbot/
-        const clawdbotRoot = join(homedir(), '.clawdbot');
+        // Validate the base directory itself isn't a symlink pointing outside its expected parent.
+        const allowedRoot = realpathSync(dirname(baseDir));
         const resolvedBase = realpathSync(baseDir);
-        if (!resolvedBase.startsWith(clawdbotRoot)) {
-          const err = new Error('Media directory resolves outside of ~/.clawdbot/');
+        if (!isPathWithinBase(allowedRoot, resolvedBase)) {
+          const err = new Error('Media directory resolves outside of its expected root.');
           err.code = 'INVALID_PATH';
           throw err;
         }

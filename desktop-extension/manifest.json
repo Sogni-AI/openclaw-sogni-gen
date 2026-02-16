@@ -25,7 +25,12 @@
       "args": ["${__dirname}/server/mcp-server.mjs"],
       "env": {
         "SOGNI_USERNAME": "${user_config.sogni_username}",
-        "SOGNI_PASSWORD": "${user_config.sogni_password}"
+        "SOGNI_PASSWORD": "${user_config.sogni_password}",
+        "SOGNI_CREDENTIALS_PATH": "${user_config.sogni_credentials_path}",
+        "SOGNI_LAST_RENDER_PATH": "${user_config.sogni_last_render_path}",
+        "SOGNI_MEDIA_INBOUND_DIR": "${user_config.sogni_media_inbound_dir}",
+        "SOGNI_DOWNLOADS_DIR": "${user_config.sogni_downloads_dir}",
+        "SOGNI_MCP_SAVE_DOWNLOADS": "${user_config.sogni_mcp_save_downloads}"
       }
     }
   },
@@ -42,6 +47,36 @@
       "description": "Your Sogni AI password",
       "required": false,
       "sensitive": true
+    },
+    "sogni_credentials_path": {
+      "type": "string",
+      "title": "Credentials File Path",
+      "description": "Optional override for credentials file path (default: ~/.config/sogni/credentials)",
+      "required": false
+    },
+    "sogni_last_render_path": {
+      "type": "string",
+      "title": "Last Render Path",
+      "description": "Optional path for last-render metadata (default: ~/.config/sogni/last-render.json)",
+      "required": false
+    },
+    "sogni_media_inbound_dir": {
+      "type": "string",
+      "title": "Inbound Media Directory",
+      "description": "Directory used by --list-media (default: ~/.clawdbot/media/inbound)",
+      "required": false
+    },
+    "sogni_downloads_dir": {
+      "type": "string",
+      "title": "MCP Downloads Directory",
+      "description": "Where MCP saves local media copies (default: ~/Downloads/sogni)",
+      "required": false
+    },
+    "sogni_mcp_save_downloads": {
+      "type": "string",
+      "title": "Save MCP Downloads",
+      "description": "Set to 0 to disable writing local MCP media copies",
+      "required": false
     }
   },
   "tools": [

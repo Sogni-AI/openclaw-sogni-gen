@@ -47,6 +47,25 @@ npm i sogni-gen
 ln -sfn node_modules/sogni-gen sogni-gen
 ```
 
+## Filesystem Paths and Overrides
+
+Default file paths used by this skill:
+
+- Credentials file (read): `~/.config/sogni/credentials`
+- Last render metadata (read/write): `~/.config/sogni/last-render.json`
+- OpenClaw config (read): `~/.openclaw/openclaw.json`
+- Media listing for `--list-media` (read): `~/.clawdbot/media/inbound`
+- MCP local result copies (write): `~/Downloads/sogni`
+
+Path override environment variables:
+
+- `SOGNI_CREDENTIALS_PATH`
+- `SOGNI_LAST_RENDER_PATH`
+- `SOGNI_MEDIA_INBOUND_DIR`
+- `OPENCLAW_CONFIG_PATH`
+- `SOGNI_DOWNLOADS_DIR` (MCP)
+- `SOGNI_MCP_SAVE_DOWNLOADS=0` to disable MCP local file writes
+
 ## Usage (Images & Video)
 
 ```bash
@@ -170,7 +189,10 @@ When installed as an OpenClaw plugin, `sogni-gen` will read defaults from:
           "defaultFps": 16,
           "defaultDurationSec": 5,
           "defaultImageTimeoutSec": 30,
-          "defaultVideoTimeoutSec": 300
+          "defaultVideoTimeoutSec": 300,
+          "credentialsPath": "~/.config/sogni/credentials",
+          "lastRenderPath": "~/.config/sogni/last-render.json",
+          "mediaInboundDir": "~/.clawdbot/media/inbound"
         }
       }
     }

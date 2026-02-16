@@ -132,7 +132,10 @@ If OpenClaw loads this plugin, `sogni-gen` will read defaults from your OpenClaw
           "defaultFps": 16,
           "defaultDurationSec": 5,
           "defaultImageTimeoutSec": 30,
-          "defaultVideoTimeoutSec": 300
+          "defaultVideoTimeoutSec": 300,
+          "credentialsPath": "~/.config/sogni/credentials",
+          "lastRenderPath": "~/.config/sogni/last-render.json",
+          "mediaInboundDir": "~/.clawdbot/media/inbound"
         }
       }
     }
@@ -157,6 +160,25 @@ SOGNI_PASSWORD=your_password
 EOF
 chmod 600 ~/.config/sogni/credentials
 ```
+
+### Filesystem Paths and Overrides
+
+By default, the runtime reads/writes:
+
+- Credentials file: `~/.config/sogni/credentials` (read)
+- Last render metadata: `~/.config/sogni/last-render.json` (read/write)
+- OpenClaw config: `~/.openclaw/openclaw.json` (read)
+- Inbound media listing (`--list-media`): `~/.clawdbot/media/inbound` (read)
+- MCP local result copies: `~/Downloads/sogni` (write)
+
+Override with environment variables:
+
+- `SOGNI_CREDENTIALS_PATH`
+- `SOGNI_LAST_RENDER_PATH`
+- `SOGNI_MEDIA_INBOUND_DIR`
+- `OPENCLAW_CONFIG_PATH`
+- `SOGNI_DOWNLOADS_DIR` (MCP)
+- `SOGNI_MCP_SAVE_DOWNLOADS=0` (disable MCP local file writes)
 
 ## Usage
 

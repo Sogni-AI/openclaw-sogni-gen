@@ -28,7 +28,11 @@ import { homedir } from 'os';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SOGNI_GEN = join(__dirname, 'sogni-gen.mjs');
-const CREDENTIALS_PATH = join(homedir(), '.config', 'sogni', 'credentials');
+const DEFAULT_CREDENTIALS_PATH = join(homedir(), '.config', 'sogni', 'credentials');
+const DEFAULT_DOWNLOADS_DIR = join(homedir(), 'Downloads', 'sogni');
+const CREDENTIALS_PATH = process.env.SOGNI_CREDENTIALS_PATH?.trim() || DEFAULT_CREDENTIALS_PATH;
+const DOWNLOADS_DIR = process.env.SOGNI_DOWNLOADS_DIR?.trim() || DEFAULT_DOWNLOADS_DIR;
+const MCP_SAVE_DOWNLOADS = process.env.SOGNI_MCP_SAVE_DOWNLOADS !== '0';
 const SERVER_VERSION = (() => {
   try {
     const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
@@ -139,6 +143,7 @@ function checkCredentials() {
           '   chmod 600 ~/.config/sogni/credentials',
           '',
           'Or set SOGNI_USERNAME and SOGNI_PASSWORD environment variables.',
+          'Optional: set SOGNI_CREDENTIALS_PATH to use a different credentials file path.',
         ].join('\n'),
       },
     ],
@@ -204,15 +209,16 @@ async function formatSuccess(result) {
         ? (url.match(/\.(png|jpg|jpeg|webp|gif)/i)?.[1]?.toLowerCase() || 'png')
         : (url.match(/\.(mp4|webm|mov)/i)?.[1]?.toLowerCase() || 'mp4');
 
-      // Save to ~/Downloads/sogni/ so the user can find it easily
-      const { mkdirSync, writeFileSync } = await import('fs');
-      const downloadsDir = join(homedir(), 'Downloads', 'sogni');
-      mkdirSync(downloadsDir, { recursive: true });
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const filename = `sogni-${timestamp}-${savedPaths.length}.${ext}`;
-      const filePath = join(downloadsDir, filename);
-      writeFileSync(filePath, buf);
-      savedPaths.push(filePath);
+      // Save to local disk (default: ~/Downloads/sogni) so terminal users can open files.
+      if (MCP_SAVE_DOWNLOADS) {
+        const { mkdirSync, writeFileSync } = await import('fs');
+        mkdirSync(DOWNLOADS_DIR, { recursive: true });
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const filename = `sogni-${timestamp}-${savedPaths.length}.${ext}`;
+        const filePath = join(DOWNLOADS_DIR, filename);
+        writeFileSync(filePath, buf);
+        savedPaths.push(filePath);
+      }
 
       // For images, also embed as base64 (Claude Desktop can render these)
       if (isImage) {
