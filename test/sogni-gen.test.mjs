@@ -440,3 +440,72 @@ test('--controlnet-strength flag is recognized', () => {
   const { stderr } = runCli(['--video', '--workflow', 'v2v', '--ref-video', 'vid.mp4', '--controlnet-name', 'canny', '--controlnet-strength', '0.7', 'a cat']);
   assert.ok(!stderr.includes('Unknown option: --controlnet-strength'), `Should recognize --controlnet-strength, got: ${stderr}`);
 });
+
+// --- Utility flag tests ---
+
+test('--extract-last-frame requires both video and output args', () => {
+  expectCliError(['--extract-last-frame'], '--extract-last-frame requires a value.');
+});
+
+test('--extract-last-frame with non-existent video file returns an error', () => {
+  const { exitCode, stderr } = runCli(['--extract-last-frame', '/tmp/nonexistent_video_12345.mp4', '/tmp/frame.png']);
+  assert.equal(exitCode, 1);
+  assert.ok(stderr.includes('not found') || stderr.includes('FILE_NOT_FOUND'), `Expected file-not-found error, got: ${stderr}`);
+});
+
+test('--concat-videos requires at least 2 clips', () => {
+  expectCliError(['--concat-videos', '/tmp/out.mp4', '/tmp/a.mp4'], '--concat-videos requires at least 2 clip');
+});
+
+test('--concat-videos with missing output arg returns an error', () => {
+  expectCliError(['--concat-videos'], '--concat-videos (output path) requires a value.');
+});
+
+test('--list-media with valid type is recognized', () => {
+  const { exitCode, stderr } = runCli(['--json', '--list-media', 'images']);
+  assert.equal(exitCode, 0);
+  assert.ok(!stderr.includes('Unknown option'), `Should recognize --list-media, got: ${stderr}`);
+});
+
+test('--list-media defaults to images when no type given', () => {
+  const { exitCode, stdout } = runCli(['--json', '--list-media']);
+  assert.equal(exitCode, 0);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, true);
+  assert.equal(payload.type, 'list-media');
+  assert.equal(payload.mediaType, 'images');
+});
+
+test('--list-media with audio type is recognized', () => {
+  const { exitCode, stdout } = runCli(['--json', '--list-media', 'audio']);
+  assert.equal(exitCode, 0);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, true);
+  assert.equal(payload.mediaType, 'audio');
+});
+
+test('--list-media with all type is recognized', () => {
+  const { exitCode, stdout } = runCli(['--json', '--list-media', 'all']);
+  assert.equal(exitCode, 0);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, true);
+  assert.equal(payload.mediaType, 'all');
+});
+
+test('--list-media with invalid type falls back to images', () => {
+  const { exitCode, stdout } = runCli(['--json', '--list-media', 'video']);
+  // 'video' is not a valid type, so --list-media treats it as default (images)
+  // and 'video' becomes the prompt
+  assert.equal(exitCode, 0);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, true);
+  assert.equal(payload.mediaType, 'images');
+});
+
+test('new utility flags appear in --help output', () => {
+  const { exitCode, stdout } = runCli(['--help']);
+  assert.equal(exitCode, 0);
+  assert.ok(stdout.includes('--extract-last-frame'), 'Help should include --extract-last-frame');
+  assert.ok(stdout.includes('--concat-videos'), 'Help should include --concat-videos');
+  assert.ok(stdout.includes('--list-media'), 'Help should include --list-media');
+});

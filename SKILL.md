@@ -1,6 +1,6 @@
 ---
 name: sogni-gen
-version: "1.5.2"
+version: "1.5.3"
 description: Generate images **and videos** using Sogni AI's decentralized network. Ask the agent to "draw", "generate", "create an image", or "make a video/animate" from a prompt or reference image.
 homepage: https://sogni.ai
 metadata:
@@ -128,6 +128,9 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 | `--json` | JSON output | false |
 | `--strict-size` | Do not auto-adjust i2v video size for reference resizing constraints | false |
 | `-q, --quiet` | No progress output | false |
+| `--extract-last-frame <video> <image>` | Extract last frame from video (safe ffmpeg wrapper) | - |
+| `--concat-videos <out> <clips...>` | Concatenate video clips (safe ffmpeg wrapper) | - |
+| `--list-media [type]` | List recent inbound media (images\|audio\|all) | images |
 
 ## OpenClaw Config Defaults
 
@@ -309,7 +312,7 @@ When a user requests a "360 video", follow this workflow:
 
 ### Transition Video Rule
 
-For **any transition video work**, always use the **Sogni skill/plugin** (not ffmpeg or other methods) unless explicitly told otherwise.
+For **any transition video work**, always use the **Sogni skill/plugin** (not raw ffmpeg or other shell commands). Use the built-in `--extract-last-frame`, `--concat-videos`, and `--looping` flags for video manipulation.
 
 ### Insufficient Funds Handling
 
@@ -385,9 +388,10 @@ sogni-gen -c old_photo.jpg -o restored.png -w 1024 -h 1280 \
 
 **Finding received images (Telegram/etc):**
 ```bash
-ls -la ~/.clawdbot/media/inbound/*.jpg | tail -3
-cp ~/.clawdbot/media/inbound/<latest>.jpg /tmp/to_restore.jpg
+node {{skillDir}}/sogni-gen.mjs --json --list-media images
 ```
+
+**Do NOT use `ls`, `cp`, or other shell commands to browse user files.** Always use `--list-media` to find inbound media.
 
 ## IMPORTANT KEYWORD RULE
 
@@ -417,8 +421,13 @@ node {{skillDir}}/sogni-gen.mjs -q --photobooth --ref /path/to/face.jpg -o /tmp/
 # Check current SPARK/SOGNI balances (no prompt required)
 node {{skillDir}}/sogni-gen.mjs --json --balance
 
+# Find user-sent images/audio
+node {{skillDir}}/sogni-gen.mjs --json --list-media images
+
 # Then send via message tool with filePath
 ```
+
+**Security:** Agents must use the CLI's built-in flags (`--extract-last-frame`, `--concat-videos`, `--list-media`) for all file operations and video manipulation. Never run raw shell commands (`ffmpeg`, `ls`, `cp`, etc.) directly.
 
 ## Animate Between Two Images (First-Frame / Last-Frame)
 
@@ -433,22 +442,22 @@ node {{skillDir}}/sogni-gen.mjs -q --video --ref /tmp/imageA.png --ref-end /tmp/
 
 When a user asks to **animate from a video to an image** (or "continue" a video into a new scene):
 
-1. **Extract the last frame** of the existing video:
+1. **Extract the last frame** of the existing video using the built-in safe wrapper:
    ```bash
-   ffmpeg -y -sseof -0.1 -i /tmp/existing.mp4 -frames:v 1 -update 1 /tmp/lastframe.png
+   node {{skillDir}}/sogni-gen.mjs --extract-last-frame /tmp/existing.mp4 /tmp/lastframe.png
    ```
 2. **Generate a new video** using the last frame as `--ref` and the target image as `--ref-end`:
    ```bash
    node {{skillDir}}/sogni-gen.mjs -q --video --ref /tmp/lastframe.png --ref-end /tmp/target.png -o /tmp/continuation.mp4 "scene transition prompt"
    ```
-3. **Stitch the videos** together with ffmpeg:
+3. **Concatenate the videos** using the built-in safe wrapper:
    ```bash
-   ffmpeg -y -i /tmp/existing.mp4 -i /tmp/continuation.mp4 \
-     -filter_complex "[0:v][1:v]concat=n=2:v=1:a=0[outv]" \
-     -map "[outv]" -c:v libx264 -crf 18 /tmp/full_sequence.mp4
+   node {{skillDir}}/sogni-gen.mjs --concat-videos /tmp/full_sequence.mp4 /tmp/existing.mp4 /tmp/continuation.mp4
    ```
 
 This ensures visual continuity — the new clip picks up exactly where the previous one ended.
+
+**Do NOT run raw `ffmpeg` commands.** Always use `--extract-last-frame` and `--concat-videos` for video manipulation.
 
 **Always apply this pattern when:**
 - User says "animate image A to image B" → use `--ref A --ref-end B`
