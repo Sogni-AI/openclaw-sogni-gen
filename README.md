@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/screenshot.jpg" alt="Telegram image render workflow" width="320" />
+  <img src="https://raw.githubusercontent.com/Sogni-AI/openclaw-sogni-gen/main/docs/screenshot.jpg" alt="Telegram image render workflow" width="320" />
 </p>
 
 # Sogni Gen — AI Image & Video Generation
