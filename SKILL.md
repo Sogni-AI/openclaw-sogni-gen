@@ -1,6 +1,6 @@
 ---
 name: sogni-gen
-version: "1.5.7"
+version: "1.5.8"
 description: Generate images **and videos** using Sogni AI's decentralized network. Ask the agent to "draw", "generate", "create an image", or "make a video/animate" from a prompt or reference image.
 homepage: https://sogni.ai
 metadata:
@@ -22,7 +22,7 @@ Generate **images and videos** using Sogni AI's decentralized GPU network.
 
 ## Setup
 
-1. **Get Sogni credentials** at https://sogni.ai
+1. **Get Sogni credentials** at https://app.sogni.ai/
 2. **Create credentials file:**
 ```bash
 mkdir -p ~/.config/sogni

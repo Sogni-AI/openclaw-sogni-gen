@@ -149,7 +149,7 @@ Seed strategies: `prompt-hash` (deterministic) or `random`.
 
 ## Setup
 
-1. Create a Sogni account at https://sogni.ai
+1. Create a Sogni account at https://app.sogni.ai/
 2. Create credentials file:
 
 ```bash

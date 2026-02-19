@@ -132,7 +132,7 @@ function checkCredentials() {
         text: [
           'Sogni credentials not found. Please set up credentials:',
           '',
-          '1. Create a Sogni account at https://sogni.ai',
+          '1. Create a Sogni account at https://app.sogni.ai/',
           '2. Create the credentials file:',
           '',
           '   mkdir -p ~/.config/sogni',

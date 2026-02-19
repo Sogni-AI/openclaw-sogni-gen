@@ -24,7 +24,7 @@ EOF
 chmod 600 ~/.config/sogni/credentials
 ```
 
-Sign up at https://sogni.ai if you don't have an account. You get 50 free Spark tokens daily at https://app.sogni.ai/
+Sign up at https://app.sogni.ai/ if you don't have an account. You get 50 free Spark tokens daily at https://app.sogni.ai/
 
 ## How to Generate
 
