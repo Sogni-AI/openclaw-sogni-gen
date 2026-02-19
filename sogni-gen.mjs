@@ -2740,6 +2740,7 @@ async function main() {
     
     const results = [];
     let completedJobs = 0;
+    let loopingStartImageBuffer;
     
     const completionPromise = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -2841,6 +2842,9 @@ async function main() {
           endImageBuffer = resizedBuffer;
         }
       }
+      // Preserve the prepared start-frame buffer so looping (A->B->A) can reuse it later.
+      loopingStartImageBuffer = imageBuffer;
+
       const modelDefaults = getModelDefaults(options.model, openclawConfig);
       const steps = resolveVideoSteps(options.model, modelDefaults, options.steps);
       const guidance = options.guidance ?? modelDefaults?.guidance;
@@ -3162,7 +3166,7 @@ async function main() {
             stylePrompt: '',
             numberOfMedia: 1,
             referenceImage: readFileSync(lastFramePath),
-            referenceImageEnd: imageBuffer,
+            referenceImageEnd: loopingStartImageBuffer,
             fps: options.fps,
             width: options.width,
             height: options.height,
