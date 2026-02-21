@@ -1,14 +1,33 @@
 ---
 name: sogni-gen
-version: "1.5.10"
-description: Generate images **and videos** using Sogni AI's decentralized network. Ask the agent to "draw", "generate", "create an image", or "make a video/animate" from a prompt or reference image.
+version: "1.5.11"
+description: Generate images **and videos** using Sogni AI's decentralized network, with local credential/config files and optional local media inputs. Ask the agent to "draw", "generate", "create an image", or "make a video/animate" from a prompt or reference image.
 homepage: https://sogni.ai
 metadata:
   clawdbot:
     emoji: "🎨"
+    primaryEnv: "SOGNI_USERNAME"
     os: ["darwin", "linux", "win32"]
     requires:
       bins: ["node"]
+      anyBins: ["ffmpeg"]
+      env:
+        - "SOGNI_USERNAME"
+        - "SOGNI_PASSWORD"
+        - "SOGNI_CREDENTIALS_PATH"
+        - "SOGNI_LAST_RENDER_PATH"
+        - "SOGNI_MEDIA_INBOUND_DIR"
+        - "OPENCLAW_CONFIG_PATH"
+        - "OPENCLAW_PLUGIN_CONFIG"
+        - "FFMPEG_PATH"
+        - "SOGNI_DOWNLOADS_DIR"
+        - "SOGNI_MCP_SAVE_DOWNLOADS"
+      config:
+        - "~/.config/sogni/credentials"
+        - "~/.openclaw/openclaw.json"
+        - "~/.clawdbot/media/inbound"
+        - "~/.config/sogni/last-render.json"
+        - "~/Downloads/sogni"
     install:
       - id: npm
         kind: exec
