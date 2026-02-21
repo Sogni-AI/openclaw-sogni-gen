@@ -15,11 +15,12 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { spawn } from 'child_process';
+import { execaNode } from 'execa';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
+import { getEnv, hasEnv } from './env.mjs';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -30,9 +31,9 @@ const __dirname = dirname(__filename);
 const SOGNI_GEN = join(__dirname, 'sogni-gen.mjs');
 const DEFAULT_CREDENTIALS_PATH = join(homedir(), '.config', 'sogni', 'credentials');
 const DEFAULT_DOWNLOADS_DIR = join(homedir(), 'Downloads', 'sogni');
-const CREDENTIALS_PATH = process.env.SOGNI_CREDENTIALS_PATH?.trim() || DEFAULT_CREDENTIALS_PATH;
-const DOWNLOADS_DIR = process.env.SOGNI_DOWNLOADS_DIR?.trim() || DEFAULT_DOWNLOADS_DIR;
-const MCP_SAVE_DOWNLOADS = process.env.SOGNI_MCP_SAVE_DOWNLOADS !== '0';
+const CREDENTIALS_PATH = getEnv('SOGNI_CREDENTIALS_PATH', { trim: true }) || DEFAULT_CREDENTIALS_PATH;
+const DOWNLOADS_DIR = getEnv('SOGNI_DOWNLOADS_DIR', { trim: true }) || DEFAULT_DOWNLOADS_DIR;
+const MCP_SAVE_DOWNLOADS = getEnv('SOGNI_MCP_SAVE_DOWNLOADS') !== '0';
 const SERVER_VERSION = (() => {
   try {
     const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
@@ -84,36 +85,30 @@ function validateEnum(value, allowed, label) {
  */
 function runSogniGen(args, { timeoutMs = 30_000 } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [SOGNI_GEN, '--json', '--quiet', ...args], {
-      stdio: ['ignore', 'pipe', 'pipe'],
+    execaNode(SOGNI_GEN, ['--json', '--quiet', ...args], {
       timeout: timeoutMs,
-    });
+      reject: false,
+    }).then(({ stdout, stderr, exitCode, timedOut }) => {
+      const trimmedStdout = (stdout || '').trim();
+      const trimmedStderr = (stderr || '').trim();
 
-    const stdoutChunks = [];
-    const stderrChunks = [];
-
-    child.stdout.on('data', (chunk) => stdoutChunks.push(chunk));
-    child.stderr.on('data', (chunk) => stderrChunks.push(chunk));
-
-    child.on('error', (err) => {
-      reject(new Error(`Failed to spawn sogni-gen: ${err.message}`));
-    });
-
-    child.on('close', (code) => {
-      const stdout = Buffer.concat(stdoutChunks).toString('utf8').trim();
-      const stderr = Buffer.concat(stderrChunks).toString('utf8').trim();
-
-      if (!stdout) {
-        reject(new Error(stderr || `sogni-gen exited with code ${code} and no output`));
+      if (!trimmedStdout) {
+        if (timedOut) {
+          reject(new Error(`sogni-gen timed out after ${timeoutMs}ms`));
+          return;
+        }
+        reject(new Error(trimmedStderr || `sogni-gen exited with code ${exitCode} and no output`));
         return;
       }
 
       try {
-        const result = JSON.parse(stdout);
+        const result = JSON.parse(trimmedStdout);
         resolve(result);
       } catch {
-        reject(new Error(`Failed to parse sogni-gen output: ${stdout.slice(0, 500)}`));
+        reject(new Error(`Failed to parse sogni-gen output: ${trimmedStdout.slice(0, 500)}`));
       }
+    }).catch((err) => {
+      reject(new Error(`Failed to execute sogni-gen: ${err.message}`));
     });
   });
 }
@@ -124,7 +119,7 @@ function runSogniGen(args, { timeoutMs = 30_000 } = {}) {
 
 function checkCredentials() {
   if (existsSync(CREDENTIALS_PATH)) return null;
-  if (process.env.SOGNI_USERNAME && process.env.SOGNI_PASSWORD) return null;
+  if (hasEnv('SOGNI_USERNAME') && hasEnv('SOGNI_PASSWORD')) return null;
   return {
     content: [
       {

@@ -7,16 +7,16 @@
 import { SogniClientWrapper, ClientEvent, getMaxContextImages } from '@sogni-ai/sogni-client-wrapper';
 import JSON5 from 'json5';
 import { createHash, randomBytes } from 'crypto';
-import { spawnSync } from 'child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, statSync, readdirSync, realpathSync, lstatSync } from 'fs';
 import { join, dirname, basename, extname, sep } from 'path';
 import { homedir, tmpdir } from 'os';
 import sharp from 'sharp';
+import { getEnv, hasEnv } from './env.mjs';
 
 // ---------------------------------------------------------------------------
 // Path sanitization — defense-in-depth for any value that becomes a file path
-// or process argument.  spawnSync already uses the array form (no shell), so
-// classic shell injection is not possible.  These checks guard against:
+// or process argument. execaSync runs argument arrays without shell expansion,
+// so classic shell injection is not possible. These checks guard against:
 //   • null-byte injection (can truncate paths at the C level)
 //   • control-character injection
 //   • FFMPEG_PATH pointing to a non-ffmpeg binary
@@ -50,8 +50,8 @@ const DEFAULT_CREDENTIALS_PATH = join(homedir(), '.config', 'sogni', 'credential
 const DEFAULT_LAST_RENDER_PATH = join(homedir(), '.config', 'sogni', 'last-render.json');
 const DEFAULT_OPENCLAW_CONFIG_PATH = join(homedir(), '.openclaw', 'openclaw.json');
 const DEFAULT_MEDIA_INBOUND_DIR = join(homedir(), '.clawdbot', 'media', 'inbound');
-const OPENCLAW_CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || DEFAULT_OPENCLAW_CONFIG_PATH;
-const IS_OPENCLAW_INVOCATION = Boolean(process.env.OPENCLAW_PLUGIN_CONFIG);
+const OPENCLAW_CONFIG_PATH = getEnv('OPENCLAW_CONFIG_PATH') || DEFAULT_OPENCLAW_CONFIG_PATH;
+const IS_OPENCLAW_INVOCATION = Boolean(getEnv('OPENCLAW_PLUGIN_CONFIG'));
 const RAW_ARGS = process.argv.slice(2);
 const CLI_WANTS_JSON = RAW_ARGS.includes('--json');
 const JSON_ERROR_MODE = CLI_WANTS_JSON || IS_OPENCLAW_INVOCATION;
@@ -645,9 +645,10 @@ function buildMultiAnglePrompt({ azimuth, elevation, distance, description }) {
 }
 
 function loadOpenClawPluginConfig() {
-  if (process.env.OPENCLAW_PLUGIN_CONFIG) {
+  const openclawPluginConfig = getEnv('OPENCLAW_PLUGIN_CONFIG');
+  if (openclawPluginConfig) {
     try {
-      return JSON5.parse(process.env.OPENCLAW_PLUGIN_CONFIG);
+      return JSON5.parse(openclawPluginConfig);
     } catch (e) {
       return null;
     }
@@ -664,17 +665,17 @@ function loadOpenClawPluginConfig() {
 
 const openclawConfig = loadOpenClawPluginConfig();
 const CREDENTIALS_PATH = resolveConfiguredPath(
-  process.env.SOGNI_CREDENTIALS_PATH || openclawConfig?.credentialsPath,
+  getEnv('SOGNI_CREDENTIALS_PATH') || openclawConfig?.credentialsPath,
   DEFAULT_CREDENTIALS_PATH,
   'SOGNI credentials path'
 );
 const LAST_RENDER_PATH = resolveConfiguredPath(
-  process.env.SOGNI_LAST_RENDER_PATH || openclawConfig?.lastRenderPath,
+  getEnv('SOGNI_LAST_RENDER_PATH') || openclawConfig?.lastRenderPath,
   DEFAULT_LAST_RENDER_PATH,
   'SOGNI last render path'
 );
 const MEDIA_INBOUND_DIR = resolveConfiguredPath(
-  process.env.SOGNI_MEDIA_INBOUND_DIR || openclawConfig?.mediaInboundDir,
+  getEnv('SOGNI_MEDIA_INBOUND_DIR') || openclawConfig?.mediaInboundDir,
   DEFAULT_MEDIA_INBOUND_DIR,
   'SOGNI media inbound path'
 );
@@ -1819,10 +1820,10 @@ function loadCredentials() {
     }
   }
   
-  if (process.env.SOGNI_USERNAME && process.env.SOGNI_PASSWORD) {
+  if (hasEnv('SOGNI_USERNAME') && hasEnv('SOGNI_PASSWORD')) {
     return {
-      SOGNI_USERNAME: process.env.SOGNI_USERNAME,
-      SOGNI_PASSWORD: process.env.SOGNI_PASSWORD
+      SOGNI_USERNAME: getEnv('SOGNI_USERNAME'),
+      SOGNI_PASSWORD: getEnv('SOGNI_PASSWORD')
     };
   }
 
@@ -1899,10 +1900,18 @@ function removeClientListener(client, event, handler) {
   }
 }
 
-function ensureFfmpegAvailable() {
-  const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
+let execaPromise = null;
+async function loadExeca() {
+  if (!execaPromise) {
+    execaPromise = import('execa');
+  }
+  return execaPromise;
+}
+
+async function ensureFfmpegAvailable() {
+  const ffmpegPath = getEnv('FFMPEG_PATH') || 'ffmpeg';
   sanitizePath(ffmpegPath, 'FFMPEG_PATH');
-  const result = spawnSync(ffmpegPath, ['-version'], { stdio: 'pipe' });
+  const result = await runCommand(ffmpegPath, ['-version'], { captureOutput: true });
   if (result.error || result.status !== 0) {
     const err = new Error('ffmpeg is required to assemble the 360 video.');
     err.code = 'MISSING_FFMPEG';
@@ -1911,7 +1920,7 @@ function ensureFfmpegAvailable() {
     throw err;
   }
   // Verify the binary actually is ffmpeg (not an arbitrary executable)
-  const stdout = result.stdout?.toString() || '';
+  const stdout = result.stdout || '';
   if (!stdout.toLowerCase().includes('ffmpeg')) {
     const err = new Error('FFMPEG_PATH does not point to an ffmpeg binary.');
     err.code = 'INVALID_FFMPEG';
@@ -1945,10 +1954,39 @@ function isNonEmptyFile(filePath) {
   }
 }
 
-function buildAngles360Video(outputPath, frames, fps) {
+async function runCommand(command, args, { captureOutput = false } = {}) {
+  const options = { reject: false };
+  if (captureOutput) {
+    options.stdout = 'pipe';
+    options.stderr = 'pipe';
+  } else {
+    options.stdout = 'inherit';
+    options.stderr = 'inherit';
+  }
+
+  try {
+    const { execa } = await loadExeca();
+    const result = await execa(command, args, options);
+    return {
+      status: result.exitCode,
+      error: null,
+      stdout: result.stdout || '',
+      stderr: result.stderr || ''
+    };
+  } catch (error) {
+    return {
+      status: Number.isInteger(error?.exitCode) ? error.exitCode : null,
+      error,
+      stdout: error?.stdout || '',
+      stderr: error?.stderr || ''
+    };
+  }
+}
+
+async function buildAngles360Video(outputPath, frames, fps) {
   sanitizePath(outputPath, '--angles-360-video output path');
   frames.forEach((f, i) => sanitizePath(f, `frame[${i}]`));
-  const ffmpegPath = ensureFfmpegAvailable();
+  const ffmpegPath = await ensureFfmpegAvailable();
   const tempListPath = outputPath.replace(/\.mp4$/i, '') + '.concat.txt';
   const frameDuration = 1 / fps;
   writeConcatList(tempListPath, frames, frameDuration);
@@ -1962,7 +2000,7 @@ function buildAngles360Video(outputPath, frames, fps) {
     '-pix_fmt', 'yuv420p',
     outputPath
   ];
-  const result = spawnSync(ffmpegPath, args, { stdio: 'inherit' });
+  const result = await runCommand(ffmpegPath, args);
   if (result.error || result.status !== 0) {
     // ffmpeg sometimes exits non-zero even when the output file is usable.
     // Treat it as success if the output exists and is non-empty.
@@ -1977,10 +2015,10 @@ function buildAngles360Video(outputPath, frames, fps) {
   }
 }
 
-function extractLastFrameFromVideo(videoPath, outputImagePath) {
+async function extractLastFrameFromVideo(videoPath, outputImagePath) {
   sanitizePath(videoPath, 'video path');
   sanitizePath(outputImagePath, 'output image path');
-  const ffmpegPath = ensureFfmpegAvailable();
+  const ffmpegPath = await ensureFfmpegAvailable();
 
   // Extract the last frame by reading through the video with update mode
   // This processes all frames but only keeps the last one
@@ -1994,11 +2032,11 @@ function extractLastFrameFromVideo(videoPath, outputImagePath) {
     outputImagePath
   ];
 
-  const result = spawnSync(ffmpegPath, args, { stdio: 'pipe' });
+  const result = await runCommand(ffmpegPath, args, { captureOutput: true });
 
   if (result.error || result.status !== 0 || !isNonEmptyFile(outputImagePath)) {
-    const stderr = result.stderr?.toString() || '';
-    const stdout = result.stdout?.toString() || '';
+    const stderr = result.stderr || '';
+    const stdout = result.stdout || '';
     console.error('FFmpeg extraction failed:');
     console.error('  Video path:', videoPath);
     console.error('  Output path:', outputImagePath);
@@ -2018,10 +2056,10 @@ function extractLastFrameFromVideo(videoPath, outputImagePath) {
   }
 }
 
-function buildConcatVideoFromClips(outputPath, clips) {
+async function buildConcatVideoFromClips(outputPath, clips) {
   sanitizePath(outputPath, '--output path');
   clips.forEach((c, i) => sanitizePath(c, `clip[${i}]`));
-  const ffmpegPath = ensureFfmpegAvailable();
+  const ffmpegPath = await ensureFfmpegAvailable();
   const tempListPath = outputPath.replace(/\.mp4$/i, '') + '.concat.txt';
   const lines = clips.map((clip) => `file '${clip.replace(/'/g, "'\\''")}'`);
   writeFileSync(tempListPath, lines.join('\n'));
@@ -2035,7 +2073,7 @@ function buildConcatVideoFromClips(outputPath, clips) {
     '-pix_fmt', 'yuv420p',
     outputPath
   ];
-  const result = spawnSync(ffmpegPath, args, { stdio: 'inherit' });
+  const result = await runCommand(ffmpegPath, args);
   if (result.error || result.status !== 0) {
     if (isNonEmptyFile(outputPath)) {
       console.warn('Warning: ffmpeg exited non-zero, but output video exists and is non-empty. Continuing.');
@@ -2416,7 +2454,7 @@ async function runMultiAngleFlow(client, log) {
       clipPaths.push(clipPath);
     }
 
-    buildConcatVideoFromClips(videoOutputPath, clipPaths);
+    await buildConcatVideoFromClips(videoOutputPath, clipPaths);
     if (!options.quiet) {
       console.error(`Saved 360 video: ${videoOutputPath}`);
     }
@@ -2545,7 +2583,7 @@ async function main() {
         err.code = 'FILE_NOT_FOUND';
         throw err;
       }
-      extractLastFrameFromVideo(videoPath, outputPath);
+      await extractLastFrameFromVideo(videoPath, outputPath);
       if (options.json || JSON_ERROR_MODE) {
         console.log(JSON.stringify({
           success: true,
@@ -2569,7 +2607,7 @@ async function main() {
           throw err;
         }
       }
-      buildConcatVideoFromClips(outputPath, clips);
+      await buildConcatVideoFromClips(outputPath, clips);
       if (options.json || JSON_ERROR_MODE) {
         console.log(JSON.stringify({
           success: true,
@@ -3149,7 +3187,7 @@ async function main() {
 
           writeFileSync(clip1Path, buffer);
           log('Extracting last frame...');
-          extractLastFrameFromVideo(clip1Path, lastFramePath);
+          await extractLastFrameFromVideo(clip1Path, lastFramePath);
 
           // Generate second clip (last frame → original image)
           log('Generating return clip (B→A)...');
@@ -3247,7 +3285,7 @@ async function main() {
           await clip2Promise;
 
           log('Concatenating clips...');
-          buildConcatVideoFromClips(options.output, [clip1Path, clip2Path]);
+          await buildConcatVideoFromClips(options.output, [clip1Path, clip2Path]);
           log(`Saved looping video to ${options.output}`);
         } else {
           writeFileSync(options.output, buffer);

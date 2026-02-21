@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.3",
   "name": "sogni-gen",
-  "version": "1.5.9",
+  "version": "1.5.10",
   "display_name": "Sogni AI Image & Video Generation",
   "description": "Generate images and videos using Sogni AI's decentralized GPU network",
   "long_description": "Generate images, edit photos, create videos, and transfer faces using Sogni AI. Supports multiple models with different speed/quality tradeoffs. Uses Spark tokens — claim 50 free daily at https://app.sogni.ai/",
