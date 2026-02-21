@@ -6,92 +6,49 @@
 
 🎨 Generate **images and videos** using [Sogni AI](https://sogni.ai)'s decentralized GPU network.
 
-Works as an [MCP server](https://modelcontextprotocol.io/) for **Claude Code** and **Claude Desktop**, and as an [OpenClaw](https://github.com/OpenClaw/OpenClaw) plugin.
+Works as:
+- an [OpenClaw](https://github.com/OpenClaw/OpenClaw) plugin (recommended)
+- a skill source for Manus AI agent
+- an [MCP server](https://modelcontextprotocol.io/) for **Claude Code** and **Claude Desktop**
 
-## Installation
+## Quick Start (OpenClaw + Manus)
 
-### Claude Code (one command)
-
-```bash
-claude mcp add sogni -- npx -y -p sogni-gen sogni-gen-mcp
-```
-
-After install, just ask Claude things like:
-- "Generate an image of a sunset over mountains"
-- "Make a video of a cat playing piano"
-- "Edit this image to add a rainbow"
-- "Check my Sogni balance"
-
-### Claude Desktop
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "sogni": {
-      "command": "npx",
-      "args": ["-y", "-p", "sogni-gen", "sogni-gen-mcp"]
-    }
-  }
-}
-```
-
-Restart Claude Desktop after saving. The same natural-language commands work.
-
-> **Note:** Both Claude Code and Claude Desktop require Sogni credentials — see [Setup](#setup) below.
-
-### Global npm Install (CLI + MCP)
-
-```bash
-npm install -g sogni-gen
-sogni-gen --version
-```
-
-If `sogni-gen-mcp` is on your `PATH`, you can register it directly:
-
-```bash
-# Claude Code using globally installed binary
-claude mcp add sogni -- sogni-gen-mcp
-```
-
-Claude Desktop config using global binary:
-
-```json
-{
-  "mcpServers": {
-    "sogni": {
-      "command": "sogni-gen-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-### Quick Install (OpenClaw) - Recommended
-
-Point your OpenClaw to the [`llm.txt`](https://raw.githubusercontent.com/Sogni-AI/openclaw-sogni-gen/main/llm.txt) and everything is set up — just paste the URL into Telegram, WhatsApp, or iMessages and the bot handles image and video generation automatically.
+1. Create Sogni credentials (one-time): see [Setup](#setup).
+2. For OpenClaw, point your agent to:
 
 ```
 https://raw.githubusercontent.com/Sogni-AI/openclaw-sogni-gen/main/llm.txt
 ```
 
+3. For Manus AI agent, point it to this repository:
+
+```
+https://github.com/Sogni-AI/openclaw-sogni-gen
+```
+
+Then ask your agent:
+- "Generate an image of a sunset over mountains"
+- "Make a video of a cat playing piano"
+- "Edit this image to add a rainbow"
+- "Check my Sogni balance"
+- "Turn my selfie into James bond using photobooth"
+- "Animate the last 3 images you generated together"
+
+## OpenClaw Installation (Recommended)
+
+### Quick Install (URL)
+
+Point OpenClaw to the [`llm.txt`](https://raw.githubusercontent.com/Sogni-AI/openclaw-sogni-gen/main/llm.txt). This is the fastest setup path.
+
 ### Plugin Install
 
-This repo also ships an `openclaw.plugin.json` manifest so OpenClaw can automatically download and set everything up:
-
 ```bash
-# One command to install from GitHub
-openclaw plugins install git@github.com:Sogni-AI/openclaw-sogni-gen.git
-
-# Or if published to npm
 openclaw plugins install sogni-gen
 ```
 
 ### Manual Installation
 
 ```bash
-# Clone the repository
 git clone git@github.com:Sogni-AI/openclaw-sogni-gen.git
 cd openclaw-sogni-gen
 npm install
@@ -99,7 +56,7 @@ npm install
 
 ### OpenClaw Config Defaults
 
-If OpenClaw loads this plugin, `sogni-gen` will read defaults from your OpenClaw config:
+If OpenClaw loads this plugin, `sogni-gen` reads defaults from your OpenClaw config:
 
 ```json
 {
@@ -143,9 +100,7 @@ If OpenClaw loads this plugin, `sogni-gen` will read defaults from your OpenClaw
 }
 ```
 
-CLI flags always override these defaults.
-If your OpenClaw config lives elsewhere, set `OPENCLAW_CONFIG_PATH`.
-Seed strategies: `prompt-hash` (deterministic) or `random`.
+CLI flags always override these defaults. If your OpenClaw config lives elsewhere, set `OPENCLAW_CONFIG_PATH`. Seed strategies: `prompt-hash` (deterministic) or `random`.
 
 ## Setup
 
@@ -179,6 +134,58 @@ Override with environment variables:
 - `OPENCLAW_CONFIG_PATH`
 - `SOGNI_DOWNLOADS_DIR` (MCP)
 - `SOGNI_MCP_SAVE_DOWNLOADS=0` (disable MCP local file writes)
+
+## Claude Code and Claude Desktop (Optional)
+
+### Claude Code (one command)
+
+```bash
+claude mcp add sogni -- npx -y -p sogni-gen sogni-gen-mcp
+```
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "sogni": {
+      "command": "npx",
+      "args": ["-y", "-p", "sogni-gen", "sogni-gen-mcp"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving.
+
+### Global npm Install (CLI + MCP)
+
+```bash
+npm install -g sogni-gen
+sogni-gen --version
+```
+
+If `sogni-gen-mcp` is on your `PATH`, you can register it directly:
+
+```bash
+# Claude Code using globally installed binary
+claude mcp add sogni -- sogni-gen-mcp
+```
+
+Claude Desktop config using global binary:
+
+```json
+{
+  "mcpServers": {
+    "sogni": {
+      "command": "sogni-gen-mcp",
+      "args": []
+    }
+  }
+}
+```
 
 ## Usage
 
@@ -357,14 +364,6 @@ Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles
 | `wan_v2.2-14b-fp8_s2v_lightx2v` | ~5min | Sound-to-video |
 | `wan_v2.2-14b-fp8_animate-move_lightx2v` | ~5min | Animate-move |
 | `wan_v2.2-14b-fp8_animate-replace_lightx2v` | ~5min | Animate-replace |
-
-## With OpenClaw
-
-Once installed, just ask your agent:
-
-> "Draw me a picture of a slothicorn eating a banana"
-
-The agent will generate the image and send it to your chat.
 
 ## License
 
