@@ -1,6 +1,6 @@
 ---
 name: sogni-gen
-version: "1.5.13"
+version: "1.5.14"
 description: Generate images **and videos** using Sogni AI's decentralized network, with local credential/config files and optional local media inputs. Ask the agent to "draw", "generate", "create an image", or "make a video/animate" from a prompt or reference image.
 homepage: https://sogni.ai
 metadata:
@@ -147,7 +147,7 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 | `-c, --context <path>` | Context image for editing | - |
 | `--last-image` | Use last generated image as context/ref | - |
 | `--video, -v` | Generate video instead of image | - |
-| `--workflow <type>` | Video workflow (t2v\|i2v\|s2v\|v2v\|animate-move\|animate-replace) | inferred |
+| `--workflow <type>` | Video workflow (t2v\|i2v\|s2v\|ia2v\|a2v\|v2v\|animate-move\|animate-replace) | inferred |
 | `--fps <num>` | Frames per second (video) | 16 |
 | `--duration <sec>` | Duration in seconds (video) | 5 |
 | `--frames <num>` | Override total frames (video) | - |
@@ -480,6 +480,12 @@ node {{skillDir}}/sogni-gen.mjs -q --video --ref /path/to/image.png -o /tmp/vide
 # Generate text-to-video
 node {{skillDir}}/sogni-gen.mjs -q --video -o /tmp/video.mp4 "ocean waves at sunset"
 
+# HD / "4K" text-to-video: prefer LTX-2.3
+node {{skillDir}}/sogni-gen.mjs -q --video -m ltx23-22b-fp8_t2v_distilled -w 1920 -h 1088 -o /tmp/video.mp4 "cinematic ocean flyover"
+
+# HD / "4K" image-to-video: prefer LTX i2v
+node {{skillDir}}/sogni-gen.mjs -q --video --ref /path/to/image.png -m ltx2-19b-fp8_i2v_distilled -w 1920 -h 1088 -o /tmp/video.mp4 "slow cinematic push-in"
+
 # Photobooth: stylize a face photo
 node {{skillDir}}/sogni-gen.mjs -q --photobooth --ref /path/to/face.jpg -o /tmp/stylized.png "80s fashion portrait"
 
@@ -491,6 +497,15 @@ node {{skillDir}}/sogni-gen.mjs --json --list-media images
 
 # Then send via message tool with filePath
 ```
+
+## High-Res Video Routing
+
+When the user asks for video in **"hd"**, **"1080p"**, **"4k"**, **"uhd"**, or **"high-res"**, do not use the default WAN video models.
+
+- For **text-to-video**, use `-m ltx23-22b-fp8_t2v_distilled`.
+- For **image-to-video**, use `-m ltx2-19b-fp8_i2v_distilled`.
+- Prefer LTX-sized dimensions such as `-w 1920 -h 1088`.
+- Treat "4k" as a signal to use the highest practical LTX path exposed by this skill, even if the exact output is not literal 3840x2160.
 
 **Security:** Agents must use the CLI's built-in flags (`--extract-last-frame`, `--concat-videos`, `--list-media`) for all file operations and video manipulation. Never run raw shell commands (`ffmpeg`, `ls`, `cp`, etc.) directly.
 

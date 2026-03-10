@@ -86,6 +86,12 @@ node {{skillDir}}/sogni-gen.mjs -q --video --workflow a2v --ref-audio /path/to/s
 # LTX-2.3 text-to-video
 node {{skillDir}}/sogni-gen.mjs -q --video -m ltx23-22b-fp8_t2v_distilled --duration 20 -o /tmp/ltx23.mp4 "cinematic drone shot"
 
+# HD / "4K" text-to-video: prefer LTX-2.3 over WAN defaults
+node {{skillDir}}/sogni-gen.mjs -q --video -m ltx23-22b-fp8_t2v_distilled -w 1920 -h 1088 -o /tmp/hd-video.mp4 "cinematic ocean flyover"
+
+# HD / "4K" image-to-video: prefer LTX i2v over WAN defaults
+node {{skillDir}}/sogni-gen.mjs -q --video --ref /path/to/image.png -m ltx2-19b-fp8_i2v_distilled -w 1920 -h 1088 -o /tmp/hd-i2v.mp4 "slow cinematic push-in"
+
 # Motion transfer from another video
 node {{skillDir}}/sogni-gen.mjs -q --video --ref /path/to/subject.jpg --ref-video /path/to/motion.mp4 --workflow animate-move -o /tmp/animated.mp4 "transfer motion"
 ```
@@ -161,11 +167,12 @@ node {{skillDir}}/sogni-gen.mjs --json --balance
 3. When they send a photo and ask to edit/change/modify it: use -c with their image.
 4. When they send a photo and ask to animate it: use --video --ref with their image.
 5. When they send a photo + audio and ask for lip sync: use --video --ref IMAGE --ref-audio AUDIO.
-6. Always use -q (quiet) and -o (output to file) so you can send the result back.
-7. After generating, send the file to the user via the message tool with filePath.
-8. If you get "Insufficient funds", tell them: "Claim 50 free daily Spark points at https://app.sogni.ai/"
-9. For transition/animation videos, always use this plugin's built-in flags (not raw ffmpeg). Use `--looping`, `--extract-last-frame`, or `--concat-videos`.
-10. Default to 768x768 for images. WAN video sizes must be divisible by 16; LTX family sizes must be divisible by 64.
+6. If the user asks for video in "hd", "1080p", "4k", "uhd", or "high-res", do not use WAN defaults. For text-to-video, use `-m ltx23-22b-fp8_t2v_distilled`. For image-to-video, use `-m ltx2-19b-fp8_i2v_distilled`. Prefer LTX-sized outputs such as `-w 1920 -h 1088`.
+7. Always use -q (quiet) and -o (output to file) so you can send the result back.
+8. After generating, send the file to the user via the message tool with filePath.
+9. If you get "Insufficient funds", tell them: "Claim 50 free daily Spark points at https://app.sogni.ai/"
+10. For transition/animation videos, always use this plugin's built-in flags (not raw ffmpeg). Use `--looping`, `--extract-last-frame`, or `--concat-videos`.
+11. Default to 768x768 for images. WAN video sizes must be divisible by 16; LTX family sizes must be divisible by 64.
 
 ## Finding User-Sent Media
 
@@ -197,6 +204,12 @@ You: Use --video --ref with their photo, send video.
 
 User: "Make a video of a cat playing piano"
 You: Use --video (t2v), send video.
+
+User: "Make this image into a 4k cinematic video" *sends photo*
+You: Use `--video --ref` with the image and prefer `-m ltx2-19b-fp8_i2v_distilled -w 1920 -h 1088`.
+
+User: "Create an HD video of a spaceship landing"
+You: Use `--video -m ltx23-22b-fp8_t2v_distilled -w 1920 -h 1088`.
 
 User: *sends photo + audio* "Make this person say this"
 You: Use --video --ref photo --ref-audio audio (s2v), send video.
