@@ -12,6 +12,7 @@ import { join, dirname, basename, extname, sep } from 'path';
 import { homedir, tmpdir } from 'os';
 import sharp from 'sharp';
 import { getEnv, hasEnv } from './env.mjs';
+import { PACKAGE_VERSION } from './version.mjs';
 
 // ---------------------------------------------------------------------------
 // Path sanitization — defense-in-depth for any value that becomes a file path
@@ -55,14 +56,6 @@ const IS_OPENCLAW_INVOCATION = Boolean(getEnv('OPENCLAW_PLUGIN_CONFIG'));
 const RAW_ARGS = process.argv.slice(2);
 const CLI_WANTS_JSON = RAW_ARGS.includes('--json');
 const JSON_ERROR_MODE = CLI_WANTS_JSON || IS_OPENCLAW_INVOCATION;
-const PACKAGE_VERSION = (() => {
-  try {
-    const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
-    return pkg.version || 'unknown';
-  } catch {
-    return 'unknown';
-  }
-})();
 const VIDEO_WORKFLOW_DEFAULT_MODELS = {
   't2v': 'wan_v2.2-14b-fp8_t2v_lightx2v',
   'i2v': 'wan_v2.2-14b-fp8_i2v_lightx2v',

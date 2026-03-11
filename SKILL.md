@@ -1,6 +1,6 @@
 ---
 name: sogni-gen
-version: "1.5.15"
+version: "1.5.16"
 description: Generate images **and videos** using Sogni AI's decentralized network, with local credential/config files and optional local media inputs. Ask the agent to "draw", "generate", "create an image", or "make a video/animate" from a prompt or reference image.
 homepage: https://sogni.ai
 metadata:
@@ -23,6 +23,7 @@ metadata:
         - "FFMPEG_PATH"
         - "SOGNI_DOWNLOADS_DIR"
         - "SOGNI_MCP_SAVE_DOWNLOADS"
+        - "SOGNI_ALLOWED_DOWNLOAD_HOSTS"
       config:
         - "~/.config/sogni/credentials"
         - "~/.openclaw/openclaw.json"
@@ -32,8 +33,8 @@ metadata:
     install:
       - id: npm
         kind: exec
-        command: "cd {{skillDir}} && npm i"
-        label: "Install dependencies"
+        command: "cd {{skillDir}} && cp skill-package.json package.json && npm i"
+        label: "Prepare runtime dependencies"
 ---
 
 # Sogni Image & Video Generation
@@ -71,6 +72,8 @@ npm i sogni-gen
 ln -sfn node_modules/sogni-gen sogni-gen
 ```
 
+When this skill is distributed via ClawHub, it bootstraps its local runtime dependencies from `skill-package.json` during install. That avoids relying on a root `package.json` being present in the published skill artifact.
+
 ## Filesystem Paths and Overrides
 
 Default file paths used by this skill:
@@ -89,6 +92,7 @@ Path override environment variables:
 - `OPENCLAW_CONFIG_PATH`
 - `SOGNI_DOWNLOADS_DIR` (MCP)
 - `SOGNI_MCP_SAVE_DOWNLOADS=0` to disable MCP local file writes
+- `SOGNI_ALLOWED_DOWNLOAD_HOSTS` to override which HTTPS hosts the MCP server may auto-download and save locally
 
 ## Usage (Images & Video)
 

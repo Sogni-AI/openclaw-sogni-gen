@@ -143,6 +143,7 @@ Override with environment variables:
 - `OPENCLAW_CONFIG_PATH`
 - `SOGNI_DOWNLOADS_DIR` (MCP)
 - `SOGNI_MCP_SAVE_DOWNLOADS=0` (disable MCP local file writes)
+- `SOGNI_ALLOWED_DOWNLOAD_HOSTS` (comma-separated HTTPS host suffixes the MCP server may auto-download locally)
 
 ## Claude Code and Claude Desktop (Optional)
 

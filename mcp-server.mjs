@@ -21,6 +21,7 @@ import { dirname, join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { getEnv, hasEnv } from './env.mjs';
+import { PACKAGE_VERSION } from './version.mjs';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -34,14 +35,28 @@ const DEFAULT_DOWNLOADS_DIR = join(homedir(), 'Downloads', 'sogni');
 const CREDENTIALS_PATH = getEnv('SOGNI_CREDENTIALS_PATH', { trim: true }) || DEFAULT_CREDENTIALS_PATH;
 const DOWNLOADS_DIR = getEnv('SOGNI_DOWNLOADS_DIR', { trim: true }) || DEFAULT_DOWNLOADS_DIR;
 const MCP_SAVE_DOWNLOADS = getEnv('SOGNI_MCP_SAVE_DOWNLOADS') !== '0';
-const SERVER_VERSION = (() => {
+const SERVER_VERSION = PACKAGE_VERSION;
+const DEFAULT_ALLOWED_DOWNLOAD_HOST_SUFFIXES = ['sogni.ai'];
+const ALLOWED_DOWNLOAD_HOST_SUFFIXES = (
+  getEnv('SOGNI_ALLOWED_DOWNLOAD_HOSTS', { trim: true }) || ''
+)
+  .split(',')
+  .map((value) => value.trim().toLowerCase())
+  .filter(Boolean);
+
+function isTrustedDownloadUrl(rawUrl) {
   try {
-    const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
-    return pkg.version || 'unknown';
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'https:') return false;
+    const hostname = parsed.hostname.toLowerCase();
+    const allowed = ALLOWED_DOWNLOAD_HOST_SUFFIXES.length > 0
+      ? ALLOWED_DOWNLOAD_HOST_SUFFIXES
+      : DEFAULT_ALLOWED_DOWNLOAD_HOST_SUFFIXES;
+    return allowed.some((suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`));
   } catch {
-    return 'unknown';
+    return false;
   }
-})();
+}
 
 // ---------------------------------------------------------------------------
 // Input sanitization — validate MCP tool inputs before passing to CLI
@@ -204,6 +219,10 @@ async function formatSuccess(result) {
     const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(url);
 
     if (!isImage && !isVideo) continue;
+    if (!isTrustedDownloadUrl(url)) {
+      parts.push(`Skipped local download for untrusted host: ${url}`);
+      continue;
+    }
 
     try {
       const resp = await fetch(url);
