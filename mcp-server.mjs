@@ -321,6 +321,10 @@ LTX-2 / LTX-2.3 Video Models:
   ltx2-19b-fp8_v2v                        — Video-to-video with ControlNet, quality (~5min)
   ltx23-22b-fp8_t2v_distilled             — Text-to-video, LTX-2.3 fast distilled (~2-3min)`;
 
+const AUDIO_MODEL_TABLE = `Audio Models:
+  ace_step_1.5_turbo         — Fast (~30s), general purpose (default)
+  ace_step_1.5_sft           — Higher quality, consistent style`;
+
 const TOOLS = [
   {
     name: 'generate_image',
@@ -670,6 +674,116 @@ The face likeness is preserved while applying the style from the prompt.`,
       },
     },
   },
+  {
+    name: 'generate_song',
+    description: `Generate audio or music using Sogni AI's decentralized GPU network.
+
+Workflows:
+  music           — Music generation (default). Just provide a prompt.
+
+${AUDIO_MODEL_TABLE}
+
+Minimum duration is 10 seconds. Cost: Uses Spark tokens. Claim 50 free daily Spark at https://app.sogni.ai/`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt: {
+          type: 'string',
+          description: 'Base description of the audio/song. Can be empty if other parameters (genre/mood/lyrics/etc.) are provided.',
+        },
+        workflow: {
+          type: 'string',
+          enum: ['music'],
+          description: 'Audio workflow (default: music)',
+        },
+        model: {
+          type: 'string',
+          description: 'Model ID (default: ace_step_1.5_turbo)',
+        },
+        genre: {
+          type: 'string',
+          description: 'Music genre (e.g. "jazz", "lo-fi", "metal")',
+        },
+        mood: {
+          type: 'string',
+          description: 'Emotional tone (e.g. "chill", "epic", "melancholy")',
+        },
+        tempo: {
+          type: 'string',
+          description: 'Speed or BPM (e.g. "fast", "slow", "128bpm")',
+        },
+        instruments: {
+          type: 'string',
+          description: 'Target instruments (e.g. "piano, violin", "heavy drums")',
+        },
+        lyrics: {
+          type: 'string',
+          description: 'Words or lyrics to include in the track',
+        },
+        instrumental: {
+          type: 'boolean',
+          description: 'Force an instrumental track (default: true if no lyrics, false if lyrics provided)',
+        },
+        duration: {
+          type: 'number',
+          description: 'Target length of the audio in seconds. Minimum: 10, Default: 30.',
+        },
+        length: {
+          type: 'number',
+          description: 'Alias for duration. Target length of the audio in seconds. Default: 30.',
+        },
+        count: {
+          type: 'number',
+          description: 'How many variations to generate (default: 1).',
+        },
+        seed: {
+          type: 'number',
+          description: 'Optional seed for deterministic generation. Using the same seed with the same prompt will produce similar results.',
+        },
+        bpm: {
+          type: 'number',
+          description: 'Beats per minute (30-300, default: 120)',
+        },
+        time_signature: {
+          type: 'string',
+          description: 'Time signature (2, 3, 4, or 6 - default: 4)',
+        },
+        language: {
+          type: 'string',
+          description: 'Lyrics language code (default: en)',
+        },
+        keyscale: {
+          type: 'string',
+          description: 'Key/scale setting (e.g., "C major", "A minor")',
+        },
+        composer_mode: {
+          type: 'boolean',
+          description: 'Enable AI composer mode for higher quality (default: true)',
+        },
+        prompt_strength: {
+          type: 'number',
+          description: 'How closely to follow the prompt (0-10, default: 2.0)',
+        },
+        creativity: {
+          type: 'number',
+          description: 'Composition variation / temperature (0-2, default: 0.85)',
+        },
+        shift: {
+          type: 'number',
+          description: 'Distribution of denoising effort (1-6, default: 3)',
+        },
+        output_format: {
+          type: 'string',
+          description: 'Output audio format (mp3, flac, wav - default: mp3)',
+        },
+        output: {
+          type: 'string',
+          description: 'Optional local file path to save the generated audio (e.g., "my-song.mp3").',
+        },
+      },
+      required: ['prompt'],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -778,11 +892,14 @@ Photobooth Model:
 
 ${VIDEO_MODEL_TABLE}
 
+${AUDIO_MODEL_TABLE}
+
 Defaults:
   Image generation: z_image_turbo_bf16
   Image editing:    qwen_image_edit_2511_fp8_lightning
   Photobooth:       coreml-sogniXLturbo_alpha1_ad
-  Video:            auto-selected per workflow (t2v/i2v/s2v/ia2v/a2v/v2v/animate-move/animate-replace)`;
+  Video:            auto-selected per workflow (t2v/i2v/s2v/ia2v/a2v/v2v/animate-move/animate-replace)
+  Audio/Song:      ace_step_1.5_turbo (workflow: music)`;
 
   return { content: [{ type: 'text', text }] };
 }
@@ -804,6 +921,38 @@ async function handleConcatVideos(params) {
   const result = await runSogniGen(['--concat-videos', outputPath, ...clips], { timeoutMs: 60_000 });
   if (result.success === false) return formatError(result);
   return { content: [{ type: 'text', text: `Concatenated ${result.clipCount || clips.length} clips to: ${result.outputPath || outputPath}` }] };
+}
+
+async function handleGenerateSong(params) {
+  const args = ['--audio'];
+  if (params.prompt) args.push('--', params.prompt);
+  if (params.workflow) args.push('--audio-workflow', validateEnum(params.workflow, ['music'], 'workflow'));
+  if (params.model) args.push('-m', sanitizeString(params.model, 'model'));
+  if (params.genre) args.push('--genre', sanitizeString(params.genre, 'genre'));
+  if (params.mood) args.push('--mood', sanitizeString(params.mood, 'mood'));
+  if (params.tempo) args.push('--tempo', sanitizeString(params.tempo, 'tempo'));
+  if (params.instruments) args.push('--instruments', sanitizeString(params.instruments, 'instruments'));
+  if (params.lyrics) args.push('--lyrics', sanitizeString(params.lyrics, 'lyrics'));
+  if (params.instrumental === true) args.push('--instrumental');
+  else if (params.instrumental === false) args.push('--no-instrumental');
+  if (params.bpm) args.push('--bpm', String(params.bpm));
+  if (params.time_signature) args.push('--time-signature', sanitizeString(params.time_signature, 'time_signature'));
+  if (params.language) args.push('--language', sanitizeString(params.language, 'language'));
+  if (params.keyscale) args.push('--keyscale', sanitizeString(params.keyscale, 'keyscale'));
+  if (params.composer_mode === true) args.push('--composer-mode');
+  else if (params.composer_mode === false) args.push('--no-composer-mode');
+  if (params.prompt_strength) args.push('--prompt-strength', String(params.prompt_strength));
+  if (params.creativity) args.push('--creativity', String(params.creativity));
+  if (params.shift) args.push('--audio-shift', String(params.shift));
+  if (params.output_format) args.push('--audio-format', sanitizeString(params.output_format, 'output_format'));
+
+  const duration = params.length || params.duration;
+  if (duration) args.push('--duration', String(duration));
+  if (params.count) args.push('-n', String(params.count));
+  if (params.seed != null) args.push('-s', String(params.seed));
+  if (params.output) args.push('-o', sanitizeString(params.output, 'output'));
+
+  return runAndFormat(args, { timeoutMs: 600_000 });
 }
 
 async function handleListMedia(params) {
@@ -840,6 +989,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return await handleGenerateImage(params);
       case 'generate_video':
         return await handleGenerateVideo(params);
+      case 'generate_song':
+        return await handleGenerateSong(params);
       case 'edit_image':
         return await handleEditImage(params);
       case 'photobooth':

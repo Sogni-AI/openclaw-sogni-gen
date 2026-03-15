@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const MIN_NODE_VERSION = [22, 11, 0];
 
@@ -24,11 +25,15 @@ if (!isVersionAtLeast(currentNodeVersion, MIN_NODE_VERSION)) {
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')).version;
 const SCREENSHOT_FIXTURE = join(process.cwd(), 'docs', 'screenshot.jpg');
 
-function runCli(args, envOverrides = {}) {
+// On Windows Node v24, --loader is deprecated and broken. Use --import with module.register() instead.
+// The entrypoint must be a native path, not a file:// URL.
+const REGISTER_URL = pathToFileURL(join(process.cwd(), 'test', 'register.mjs')).href;
+const CLI_PATH = join(process.cwd(), 'sogni-gen.mjs');
+
+function runCli(args, envOverrides = {}, optionsOverride = {}) {
+  const noLoader = optionsOverride.noLoader || false;
   const tempHome = mkdtempSync(join(tmpdir(), 'sogni-gen-test-'));
   const statePath = join(tempHome, 'state.json');
-  const loaderPath = join(process.cwd(), 'test', 'loader.mjs');
-  const cliPath = join(process.cwd(), 'sogni-gen.mjs');
 
   const env = {
     ...process.env,
@@ -44,10 +49,14 @@ function runCli(args, envOverrides = {}) {
 
   Object.assign(env, envOverrides);
 
+  const cliArgs = noLoader
+    ? [CLI_PATH, ...args]
+    : ['--import', REGISTER_URL, CLI_PATH, ...args];
+
   const result = spawnSync(
     process.execPath,
-    ['--loader', loaderPath, cliPath, ...args],
-    { env, encoding: 'utf8' }
+    cliArgs,
+    { env, encoding: 'utf8', cwd: process.cwd() }
   );
 
   if (result.error) {

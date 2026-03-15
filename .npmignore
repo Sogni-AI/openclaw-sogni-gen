@@ -6,3 +6,4 @@ test/
 *.mcpb
 desktop-extension/server/node_modules/
 desktop-extension/server/package-lock.json
+AI.md

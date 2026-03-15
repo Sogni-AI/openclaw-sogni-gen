@@ -33,6 +33,8 @@ Then ask your agent:
 - "Check my Sogni balance"
 - "Turn my selfie into James bond using photobooth"
 - "Animate the last 3 images you generated together"
+- "Generate a techno song with heavy bass"
+- "Create a happy pop song with these lyrics: 'SUNSHINE IN THE RAIN...'"
 
 ## OpenClaw Installation (Recommended)
 
@@ -273,6 +275,15 @@ node sogni-gen.mjs --video --ref subject.jpg --ref-video motion.mp4 \
 # Estimate video cost (requires --steps)
 node sogni-gen.mjs --video --estimate-video-cost --steps 20 \
   -m wan_v2.2-14b-fp8_t2v_lightx2v "ocean waves at sunset"
+
+# Generate audio (music)
+node sogni-gen.mjs --audio "lo-fi chill beats"
+
+# Generate song with lyrics
+node sogni-gen.mjs --audio --lyrics "Singing in the rain, feeling no pain" "happy pop"
+
+# Advanced audio control
+node sogni-gen.mjs --audio --bpm 128 --keyscale "C major" --length 60 "techno track"
 ```
 
 ## LTX-2.3 Prompting Guide
@@ -387,6 +398,26 @@ Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles
 --ref-video <path>    Reference video for animate workflows
 -c, --context <path>  Context image(s) for editing (repeatable)
 --last-image          Use last image as context/ref
+--audio               Generate audio instead of image/video
+--audio-workflow <t>  Default: music
+--length <sec>        Target audio length (alias for --duration)
+--lyrics <text>       Include lyrics in the generation
+--genre <text>        Music genre
+--mood <text>         Music mood
+--tempo <text>        Music tempo
+--instruments <text>  Comma-separated instruments
+--instrumental        Force instrumental track
+--no-instrumental     Force vocal track
+--bpm <num>           Beats per minute (30-300)
+--time-signature <t>  2|3|4|6
+--language <lang>     Lyrics language code (default: en)
+--keyscale <text>     Key/scale (e.g., "C major")
+--composer-mode       Enable AI composer (default: true)
+--no-composer-mode    Disable AI composer
+--prompt-strength <n> Stricter prompt adherence (0-10)
+--creativity <n>      Composition variation (0-2)
+--audio-shift <n>     Denoising distribution (1-6)
+--audio-format <f>    mp3|flac|wav
 --json                JSON output
 --strict-size         Do not auto-adjust i2v video size for reference resizing constraints
 -q, --quiet           Suppress progress
@@ -414,6 +445,7 @@ Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles
 | `ltx2-19b-fp8_a2v_distilled` | ~2-3min | LTX-2 audio-to-video |
 | `ltx2-19b-fp8_v2v_distilled` | ~3min | LTX-2 video-to-video with ControlNet |
 | `ltx23-22b-fp8_t2v_distilled` | ~2-3min | LTX-2.3 text-to-video |
+| `ace_step_1.5_turbo` | ~15-30s | Audio/Music generation |
 
 ## License
 

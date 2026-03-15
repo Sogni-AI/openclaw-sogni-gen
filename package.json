@@ -1,6 +1,6 @@
 {
   "name": "sogni-gen",
-  "version": "1.5.16",
+  "version": "1.5.17",
   "description": "Sogni AI image & video generation — OpenClaw plugin and MCP server for Claude Code / Claude Desktop",
   "type": "module",
   "main": "sogni-gen.mjs",
@@ -10,6 +10,7 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs test/*.integration.mjs",
+    "test:unit": "node --test test/*.test.mjs",
     "test:integration": "node --test test/*.integration.mjs",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=sogni-gen.mjs --test-coverage-lines=50 --test-coverage-branches=35 --test-coverage-functions=50 test/sogni-gen.test.mjs",
     "test:coverage:full": "node --test --experimental-test-coverage --test-coverage-include=sogni-gen.mjs --test-coverage-lines=50 --test-coverage-branches=35 --test-coverage-functions=50 test/*.test.mjs test/*.integration.mjs"

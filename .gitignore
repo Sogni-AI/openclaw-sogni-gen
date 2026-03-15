@@ -77,3 +77,4 @@ desktop-extension/server/package-lock.json
 
 # Claude Code local config
 .claude/
+AI.md
