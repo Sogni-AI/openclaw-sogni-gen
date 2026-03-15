@@ -1,6 +1,6 @@
 ---
 name: sogni-gen
-version: "1.5.16"
+version: "1.5.17"
 description: Generate images **and videos** using Sogni AI's decentralized network, with local credential/config files and optional local media inputs. Ask the agent to "draw", "generate", "create an image", or "make a video/animate" from a prompt or reference image.
 homepage: https://sogni.ai
 metadata:
@@ -147,6 +147,22 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 | `--lora-strength <n>` | LoRA strength (repeatable) | - |
 | `--lora-strengths <n>` | Comma-separated LoRA strengths | - |
 | `--token-type <type>` | Token type: spark\|sogni | spark |
+| `--audio` | Generate audio instead of image/video | - |
+| `--lyrics <text>` | Include lyrics in the generation | - |
+| `--length <sec>` | Audio duration (alias for --duration) | 30 |
+| `--bpm <num>` | Music BPM (30-300) | 120 |
+| `--keyscale <text>` | Music key/scale | - |
+| `--genre <text>` | Music genre | - |
+| `--mood <text>` | Music mood | - |
+| `--tempo <text>` | Music tempo | - |
+| `--instruments <text>` | Composed instruments | - |
+| `--instrumental` | Force instrumental track | - |
+| `--no-instrumental` | Force vocal track | - |
+| `--composer-mode` | Enhanced AI composer (default) | true |
+| `--prompt-strength <n>` | Prompt adherence (0-10) | 2.0 |
+| `--creativity <n>` | Composition variation (0-2) | 0.85 |
+| `--audio-shift <n>` | Distribution of effort (1-6) | 3.0 |
+| `--audio-format <f>` | mp3\|flac\|wav | mp3 |
 | `--balance, --balances` | Show SPARK/SOGNI balances and exit | - |
 | `-c, --context <path>` | Context image for editing | - |
 | `--last-image` | Use last generated image as context/ref | - |

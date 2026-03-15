@@ -2,7 +2,7 @@
   "id": "sogni-gen",
   "name": "Sogni Image & Video Generation",
   "description": "Generate images and videos using Sogni AI via the sogni-gen skill.",
-  "version": "1.5.16",
+  "version": "1.5.17",
   "skills": [
     "."
   ],
@@ -45,6 +45,20 @@
         "enum": ["t2v", "i2v", "s2v", "ia2v", "a2v", "v2v", "animate-move", "animate-replace"],
         "default": "t2v",
         "description": "Default video workflow when none can be inferred."
+      },
+      "audioModels": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Override per-workflow default audio models.",
+        "properties": {
+          "music": { "type": "string", "default": "ace_step_1.5_turbo" }
+        }
+      },
+      "defaultAudioWorkflow": {
+        "type": "string",
+        "enum": ["music"],
+        "default": "music",
+        "description": "Default audio workflow when none can be inferred."
       },
       "defaultNetwork": {
         "type": "string",
@@ -105,6 +119,12 @@
         "minimum": 1,
         "maximum": 60,
         "default": 5
+      },
+      "defaultAudioDurationSec": {
+        "type": "integer",
+        "minimum": 10,
+        "maximum": 60,
+        "default": 30
       },
       "defaultImageTimeoutSec": {
         "type": "integer",

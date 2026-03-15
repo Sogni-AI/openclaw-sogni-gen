@@ -64,7 +64,11 @@ const VIDEO_WORKFLOW_DEFAULT_MODELS = {
   'a2v': 'ltx2-19b-fp8_a2v_distilled',
   'animate-move': 'wan_v2.2-14b-fp8_animate-move_lightx2v',
   'animate-replace': 'wan_v2.2-14b-fp8_animate-replace_lightx2v',
+  'animate-replace': 'wan_v2.2-14b-fp8_animate-replace_lightx2v',
   'v2v': 'ltx2-19b-fp8_v2v_distilled'
+};
+const AUDIO_WORKFLOW_DEFAULT_MODELS = {
+  'music': 'ace_step_1.5_turbo'
 };
 
 function isLtx2Model(modelId) { return modelId?.startsWith('ltx2-') || modelId?.startsWith('ltx23-') || false; }
@@ -147,6 +151,13 @@ function normalizeVideoWorkflow(value) {
   if (normalized === 'animate-move' || normalized === 'animate_move') return 'animate-move';
   if (normalized === 'animate-replace' || normalized === 'animate_replace') return 'animate-replace';
   if (normalized === 'v2v' || normalized === 'video-to-video') return 'v2v';
+  return null;
+}
+
+function normalizeAudioWorkflow(value) {
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (normalized === 'music') return 'music';
   return null;
 }
 
@@ -554,7 +565,7 @@ function pickCompatibleI2vBoundingBox(refWidth, refHeight, desiredWidth, desired
         const widthRemainder = out.width % VIDEO_DIMENSION_MULTIPLE;
         const heightRemainder = out.height % VIDEO_DIMENSION_MULTIPLE;
         const div16Distance = Math.min(widthRemainder, VIDEO_DIMENSION_MULTIPLE - widthRemainder) +
-                            Math.min(heightRemainder, VIDEO_DIMENSION_MULTIPLE - heightRemainder);
+          Math.min(heightRemainder, VIDEO_DIMENSION_MULTIPLE - heightRemainder);
         const imperfectScore = -div16Distance * 1e10 + score;
         if (!bestImperfect || imperfectScore > bestImperfect.score) {
           // Calculate adjusted output dimensions (rounded to div-16)
@@ -717,6 +728,23 @@ const options = {
   fps: 16,
   duration: 5,
   frames: null,
+  audio: false,               // Generate audio instead of image/video
+  audioWorkflow: null,         // Audio workflow type (default: music)
+  lyrics: null,                // Lyrics text for vocal tracks
+  genre: null,                 // Music genre (e.g., "jazz", "lo-fi")
+  mood: null,                  // Mood/atmosphere (e.g., "chill", "epic")
+  tempo: null,                 // Tempo description (e.g., "fast", "120bpm")
+  instruments: null,           // Comma-separated instruments
+  instrumental: null,          // Force instrumental (true) or vocal (false); null = auto from lyrics
+  bpm: null,                   // Beats per minute (30-300)
+  timesignature: null,         // Time signature (2, 3, 4, or 6)
+  language: 'en',              // Lyrics language code
+  keyscale: null,              // Key/scale (e.g., "C major")
+  composerMode: true,          // AI composer mode for higher quality
+  promptStrength: null,        // Prompt adherence (0-10, SDK default: 2.0)
+  creativity: null,            // Composition variation (0-2, SDK default: 0.85)
+  shift: null,                 // Denoising effort distribution (1-6, SDK default: 3)
+  audioOutputFormat: 'mp3',    // Output audio format: mp3 | flac | wav
   autoResizeVideoAssets: null,
   estimateVideoCost: false,
   showBalance: false,
@@ -772,6 +800,23 @@ const cliSet = {
   fps: false,
   duration: false,
   frames: false,
+  audio: false,
+  audioWorkflow: false,
+  lyrics: false,
+  genre: false,
+  mood: false,
+  tempo: false,
+  instruments: false,
+  instrumental: false,
+  bpm: false,
+  timesignature: false,
+  language: false,
+  keyscale: false,
+  composerMode: false,
+  promptStrength: false,
+  creativity: false,
+  shift: false,
+  audioOutputFormat: false,
   autoResizeVideoAssets: false,
   angles360Video: false,
   videoModel: false,
@@ -943,7 +988,7 @@ for (let i = 0; i < args.length; i++) {
     i++;
     options.fps = parsePositiveIntegerValue(raw, arg);
     cliSet.fps = true;
-  } else if (arg === '--duration') {
+  } else if (arg === '--duration' || arg === '--length') {
     const raw = requireFlagValue(args, i, arg);
     i++;
     options.duration = parsePositiveIntegerValue(raw, arg);
@@ -969,7 +1014,7 @@ for (let i = 0; i < args.length; i++) {
     i++;
     options.refImageEnd = raw;
     cliSet.refImageEnd = true;
-  } else if (arg === '--ref-audio' || arg === '--audio') {
+  } else if (arg === '--ref-audio') {
     const raw = requireFlagValue(args, i, arg);
     i++;
     options.refAudio = raw;
@@ -1105,6 +1150,91 @@ for (let i = 0; i < args.length; i++) {
     options.estimateVideoCost = true;
   } else if (arg === '--balance' || arg === '--balances') {
     options.showBalance = true;
+  } else if (arg === '-a' || arg === '--audio') {
+    options.audio = true;
+    cliSet.audio = true;
+  } else if (arg === '--audio-workflow') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.audioWorkflow = raw;
+    cliSet.audioWorkflow = true;
+  } else if (arg === '--lyrics') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.lyrics = raw;
+    cliSet.lyrics = true;
+  } else if (arg === '--genre') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.genre = raw;
+    cliSet.genre = true;
+  } else if (arg === '--mood') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.mood = raw;
+    cliSet.mood = true;
+  } else if (arg === '--tempo') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.tempo = raw;
+    cliSet.tempo = true;
+  } else if (arg === '--instruments') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.instruments = raw;
+    cliSet.instruments = true;
+  } else if (arg === '--instrumental') {
+    options.instrumental = true;
+    cliSet.instrumental = true;
+  } else if (arg === '--no-instrumental') {
+    options.instrumental = false;
+    cliSet.instrumental = true;
+  } else if (arg === '--bpm') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.bpm = parsePositiveIntegerValue(raw, arg);
+    cliSet.bpm = true;
+  } else if (arg === '--time-signature') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.timesignature = raw;
+    cliSet.timesignature = true;
+  } else if (arg === '--language') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.language = raw;
+    cliSet.language = true;
+  } else if (arg === '--keyscale') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.keyscale = raw;
+    cliSet.keyscale = true;
+  } else if (arg === '--composer-mode') {
+    options.composerMode = true;
+    cliSet.composerMode = true;
+  } else if (arg === '--no-composer-mode') {
+    options.composerMode = false;
+    cliSet.composerMode = true;
+  } else if (arg === '--prompt-strength') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.promptStrength = parseFloat(raw);
+    cliSet.promptStrength = true;
+  } else if (arg === '--creativity') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.creativity = parseFloat(raw);
+    cliSet.creativity = true;
+  } else if (arg === '--audio-shift') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.shift = parseFloat(raw);
+    cliSet.shift = true;
+  } else if (arg === '--audio-format') {
+    const raw = requireFlagValue(args, i, arg);
+    i++;
+    options.audioOutputFormat = raw;
+    cliSet.audioOutputFormat = true;
   } else if (arg === '--version' || arg === '-V') {
     options.showVersion = true;
   } else if (arg === '--help') {
@@ -1209,7 +1339,21 @@ LTX-2 / LTX-2.3 Video Models:
   ltx2-19b-fp8_a2v_distilled      Audio-to-video, fast 8-step
   ltx2-19b-fp8_v2v_distilled      Video-to-video with ControlNet (fast)
   ltx2-19b-fp8_v2v                Video-to-video with ControlNet (quality)
-  ltx23-22b-fp8_t2v_distilled     Text-to-video, LTX-2.3 fast distilled
+  ltx23-22b-fp8_t2v_distilled             Text-to-video, LTX-2.3 fast distilled
+
+Audio Options:
+  -a, --audio           Generate audio instead of image/video
+  --audio-workflow <t>  Audio workflow: music (default: music)
+  --duration <sec>      Duration in seconds (default: 30 for music, min 10)
+  --genre <text>        Music genre (e.g., "jazz", "lo-fi")
+  --mood <text>         Mood/atmosphere (e.g., "chill", "epic")
+  --tempo <text>        Tempo/speed (e.g., "fast", "120bpm")
+  --instruments <text>  Comma-separated instruments
+  --lyrics <text>       Include lyrics in the generation
+
+Audio Models:
+  ace_step_1.5_turbo    Fast, general purpose (default)
+  ace_step_1.5_sft      Higher quality
 
 Examples:
   sogni-gen "a cat wearing a hat"
@@ -1275,6 +1419,17 @@ if (openclawConfig) {
     }
     if (!cliSet.timeout && isNumber(openclawConfig.defaultVideoTimeoutSec)) {
       options.timeout = openclawConfig.defaultVideoTimeoutSec * 1000;
+      timeoutFromConfig = true;
+    }
+  } else if (options.audio) {
+    if (!cliSet.audioWorkflow && openclawConfig.defaultAudioWorkflow) {
+      options.audioWorkflow = openclawConfig.defaultAudioWorkflow;
+    }
+    if (!cliSet.duration && isNumber(openclawConfig.defaultDurationSec)) {
+      options.duration = Math.max(10, openclawConfig.defaultDurationSec);
+    }
+    if (!cliSet.timeout && isNumber(openclawConfig.defaultAudioTimeoutSec)) {
+      options.timeout = openclawConfig.defaultAudioTimeoutSec * 1000;
       timeoutFromConfig = true;
     }
   } else if (!cliSet.timeout && isNumber(openclawConfig.defaultImageTimeoutSec)) {
@@ -1434,7 +1589,7 @@ if (options.loraStrengths.length > 0 && options.loras.length === 0) {
 }
 
 if (options.loraStrengths.length > 0 && options.loras.length > 0 &&
-    options.loraStrengths.length !== options.loras.length) {
+  options.loraStrengths.length !== options.loras.length) {
   fatalCliError('--lora-strengths count must match --loras count.', {
     code: 'INVALID_ARGUMENT',
     details: { loras: options.loras.length, loraStrengths: options.loraStrengths.length }
@@ -1524,15 +1679,27 @@ if (options.video) {
   if (!cliSet.timeout && !timeoutFromConfig && options.timeout === 30000) {
     options.timeout = 60000; // 1 min for editing
   }
+} else if (options.audio) {
+  const cfgAudioModels = openclawConfig?.audioModels || {};
+  const cfgModel = options.audioWorkflow ? cfgAudioModels[options.audioWorkflow] : null;
+  options.model = options.model || cfgModel || AUDIO_WORKFLOW_DEFAULT_MODELS[options.audioWorkflow] || 'ace_step_1.5_turbo';
+  if (!cliSet.duration) {
+    options.duration = 30; // Default to 30s for music
+  }
+  options.duration = Math.max(10, options.duration);
+  if (!cliSet.timeout && !timeoutFromConfig && options.timeout === 30000) {
+    options.timeout = 300000; // 5 min for audio (pessimistic)
+  }
 } else {
   options.model = options.model || openclawConfig?.defaultImageModel || 'z_image_turbo_bf16';
 }
 
-if (!options.prompt && !options.estimateVideoCost && !options.multiAngle && !options.showBalance && !options.showVersion && !options.extractLastFrame && !options.concatVideos && !options.listMedia) {
+if (!options.prompt && !options.estimateVideoCost && !options.multiAngle && !options.showBalance && !options.showVersion && !options.extractLastFrame && !options.concatVideos && !options.listMedia &&
+  !(options.audio && (options.genre || options.mood || options.tempo || options.instruments || options.lyrics))) {
   fatalCliError('No prompt provided. Use --help for usage.', { code: 'INVALID_ARGUMENT' });
 }
 
-if (!options.video && (options.refAudio || options.refVideo || options.videoWorkflow || options.frames)) {
+if (!options.video && !options.audio && (options.refAudio || options.refVideo || options.videoWorkflow || options.frames)) {
   fatalCliError('Video-only options (--workflow/--frames/--ref-audio/--ref-video) require --video.', {
     code: 'INVALID_ARGUMENT'
   });
@@ -1784,6 +1951,23 @@ if (options.video) {
   }
 }
 
+// Normalize audio workflow
+if (options.audio) {
+  if (options.audioWorkflow) {
+    const normalized = normalizeAudioWorkflow(options.audioWorkflow);
+    if (!normalized) {
+      fatalCliError(`Unknown audio workflow "${options.audioWorkflow}". Use music.`, {
+        code: 'INVALID_ARGUMENT',
+        details: { workflow: options.audioWorkflow }
+      });
+    }
+    options.audioWorkflow = normalized;
+  }
+  if (!options.audioWorkflow) {
+    options.audioWorkflow = openclawConfig?.defaultAudioWorkflow || 'music';
+  }
+}
+
 // Validate context images against model limits
 if (options.contextImages.length > 0 && !options.video) {
   const maxImages = getMaxContextImages(options.model);
@@ -1853,7 +2037,7 @@ function loadCredentials() {
       SOGNI_API_KEY: getEnv('SOGNI_API_KEY')
     };
   }
-  
+
   if (hasEnv('SOGNI_USERNAME') && hasEnv('SOGNI_PASSWORD')) {
     return {
       SOGNI_USERNAME: getEnv('SOGNI_USERNAME'),
@@ -2588,9 +2772,9 @@ async function ensureSufficientVideoBalance(client, log) {
 
 async function main() {
   let exitCode = 0;
-  const log = options.quiet ? () => {} : console.error.bind(console);
+  const log = options.quiet ? () => { } : console.error.bind(console);
   let client = null;
-  
+
   try {
     if (options.showVersion) {
       if (options.json) {
@@ -2729,10 +2913,10 @@ async function main() {
       ...(creds.SOGNI_API_KEY
         ? { apiKey: creds.SOGNI_API_KEY, authType: 'apiKey' }
         : {
-            username: creds.SOGNI_USERNAME,
-            password: creds.SOGNI_PASSWORD,
-            authType: 'token'
-          })
+          username: creds.SOGNI_USERNAME,
+          password: creds.SOGNI_PASSWORD,
+          authType: 'token'
+        })
     });
 
     await client.connect();
@@ -2813,34 +2997,35 @@ async function main() {
       await runMultiAngleFlow(client, log);
       return;
     }
-    
+
     const results = [];
     let completedJobs = 0;
     let loopingStartImageBuffer;
-    
+
     const completionPromise = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error(`Timeout after ${options.timeout / 1000}s`));
       }, options.timeout);
-      
+
       client.on(ClientEvent.JOB_COMPLETED, (data) => {
         const jobData = data.job?.data || {};
         results.push({
           imageUrl: data.imageUrl,
           videoUrl: data.videoUrl,
+          audioUrl: data.audioUrl,
           seed: jobData.seed,
           jobIndex: data.jobIndex,
           projectId: data.projectId
         });
         completedJobs++;
-        log(`${options.video ? 'Video' : 'Image'} ${completedJobs}/${options.count} completed`);
-        
+        log(`${options.audio ? 'Audio' : (options.video ? 'Video' : 'Image')} ${completedJobs}/${options.count} completed`);
+
         if (completedJobs >= options.count) {
           clearTimeout(timeout);
           resolve();
         }
       });
-      
+
       client.on(ClientEvent.JOB_FAILED, (data) => {
         clearTimeout(timeout);
         reject(new Error(data.error || 'Job failed'));
@@ -2865,7 +3050,7 @@ async function main() {
         const message = event?.error?.message || event?.error?.error || 'Job failed';
         reject(new Error(message));
       });
-      
+
       // Progress for video
       if (options.video) {
         client.on(ClientEvent.PROJECT_PROGRESS, (data) => {
@@ -2875,15 +3060,71 @@ async function main() {
         });
       }
     });
-    
-    if (options.video) {
+
+    if (options.audio) {
+      // Audio generation
+      log(`Generating audio (${options.audioWorkflow}) with ${options.model}...`);
+
+      let finalAudioPrompt = options.prompt || '';
+      const components = [];
+      if (options.genre) components.push(`genre: ${options.genre}`);
+      if (options.mood) components.push(`mood: ${options.mood}`);
+      if (options.tempo) components.push(`tempo: ${options.tempo}`);
+      if (options.instruments) components.push(`instruments: ${options.instruments}`);
+
+      if (components.length > 0) {
+        if (finalAudioPrompt) finalAudioPrompt += ', ';
+        finalAudioPrompt += components.join(', ');
+      }
+
+      if (options.lyrics) {
+        if (finalAudioPrompt) finalAudioPrompt += '\n\n';
+        finalAudioPrompt += `[Lyrics]\n${options.lyrics}`;
+      }
+
+      if (!finalAudioPrompt && !options.quiet) {
+        console.error('Warning: Generating audio with empty prompt components.');
+      }
+
+      const audioConfig = {
+        modelId: options.model,
+        positivePrompt: finalAudioPrompt,
+        numberOfMedia: options.count,
+        duration: options.duration,
+        tokenType: options.tokenType || 'spark',
+        disableNSFWFilter: true,
+        type: 'audio',
+        // Pass lyrics as dedicated SDK field; omit if explicitly instrumental
+        lyrics: options.instrumental === true ? undefined : (options.lyrics || undefined),
+        // Advanced audio generation parameters (passed to SDK as-is)
+        bpm: options.bpm || undefined,
+        timesignature: options.timesignature || undefined,
+        language: options.language || 'en',
+        keyscale: options.keyscale || undefined,
+        composerMode: options.composerMode,
+        promptStrength: options.promptStrength !== null ? options.promptStrength : undefined,
+        creativity: options.creativity !== null ? options.creativity : undefined,
+        shift: options.shift !== null ? options.shift : undefined,
+        outputFormat: options.audioOutputFormat || undefined
+      };
+
+      // Remove undefined keys to be safe
+      Object.keys(audioConfig).forEach(key => audioConfig[key] === undefined && delete audioConfig[key]);
+
+      const audioResult = await client.createAudioProject(audioConfig);
+
+      // Check for errors in the response
+      if (audioResult?.error || audioResult?.message) {
+        throw new Error(audioResult.error || audioResult.message);
+      }
+    } else if (options.video) {
       // Video generation
       log(`Generating video (${options.videoWorkflow}) with ${options.model}...`);
       if (options.refImage) log(`Reference image: ${options.refImage}`);
       if (options.refImageEnd) log(`End frame: ${options.refImageEnd}`);
       if (options.refAudio) log(`Reference audio: ${options.refAudio}`);
       if (options.refVideo) log(`Reference video: ${options.refVideo}`);
-      
+
       let imageBuffer = options.refImage ? await fetchMediaBuffer(options.refImage) : undefined;
       let endImageBuffer = options.refImageEnd ? await fetchMediaBuffer(options.refImageEnd) : undefined;
       const audioBuffer = options.refAudio ? await fetchMediaBuffer(options.refAudio) : undefined;
@@ -2924,7 +3165,7 @@ async function main() {
       const modelDefaults = getModelDefaults(options.model, openclawConfig);
       const steps = resolveVideoSteps(options.model, modelDefaults, options.steps);
       const guidance = options.guidance ?? modelDefaults?.guidance;
-      
+
       const projectConfig = {
         modelId: options.model,
         positivePrompt: options.prompt,
@@ -2952,7 +3193,7 @@ async function main() {
       } else {
         projectConfig.duration = options.duration;
       }
-      
+
       // Add end frame for interpolation if provided
       if (endImageBuffer) {
         projectConfig.referenceImageEnd = endImageBuffer;
@@ -3002,7 +3243,7 @@ async function main() {
       log(`Editing with ${options.model}...`);
       log(`Context images: ${options.contextImages.length}`);
       if (options.seed !== null && options.seed !== undefined) log(`Using seed: ${options.seed}`);
-      
+
       // Load all context images as buffers
       const contextBuffers = await Promise.all(
         options.contextImages.map(img => fetchMediaBuffer(img))
@@ -3010,7 +3251,7 @@ async function main() {
       const modelDefaults = getModelDefaults(options.model, openclawConfig);
       const steps = options.steps ?? modelDefaults?.steps ?? (options.model.includes('lightning') ? 4 : 20);
       const guidance = options.guidance ?? modelDefaults?.guidance ?? (options.model.includes('lightning') ? 3.5 : 7.5);
-      
+
       const editConfig = {
         modelId: options.model,
         positivePrompt: options.prompt,
@@ -3039,11 +3280,11 @@ async function main() {
       if (options.loraStrengths.length > 0) {
         editConfig.loraStrengths = options.loraStrengths;
       }
-      
+
       if (options.seed !== null && options.seed !== undefined) {
         editConfig.seed = options.seed;
       }
-      
+
       await client.createImageEditProject(editConfig);
     } else if (options.photobooth) {
       // Photobooth: face transfer with InstantID ControlNet
@@ -3099,7 +3340,7 @@ async function main() {
       const modelDefaults = getModelDefaults(options.model, openclawConfig);
       const guidance = options.guidance ?? modelDefaults?.guidance ?? 1.0;
       const steps = options.steps ?? modelDefaults?.steps;
-      
+
       const projectConfig = {
         modelId: options.model,
         positivePrompt: options.prompt,
@@ -3126,21 +3367,21 @@ async function main() {
       if (steps) {
         projectConfig.steps = steps;
       }
-      
+
       if (options.seed !== null && options.seed !== undefined) {
         projectConfig.seed = options.seed;
       }
-      
+
       await client.createImageProject(projectConfig);
     }
-    
+
     // Wait for completion via events
     await completionPromise;
-    
+
     if (results.length > 0) {
-      const urls = results.map(r => options.video ? r.videoUrl : r.imageUrl).filter(Boolean);
+      const urls = results.map(r => options.audio ? r.audioUrl : (options.video ? r.videoUrl : r.imageUrl)).filter(Boolean);
       const firstResult = results[0];
-      
+
       // Save last render info
       const seeds = results.map(r => r.seed ?? options.seed);
       const renderInfo = {
@@ -3158,6 +3399,11 @@ async function main() {
         localPath: options.output || null,
         tokenType: options.tokenType || 'spark'
       };
+      if (options.audio) {
+        renderInfo.type = 'audio';
+        renderInfo.workflow = options.audioWorkflow;
+        renderInfo.duration = options.duration;
+      }
       if (options.outputFormat) {
         renderInfo.outputFormat = options.outputFormat;
       }
@@ -3204,7 +3450,7 @@ async function main() {
         renderInfo.refImage = options.refImage;
       }
       saveLastRender(renderInfo);
-      
+
       // Save to file if requested
       if (options.output && urls[0]) {
         const response = await fetch(urls[0]);
@@ -3264,10 +3510,10 @@ async function main() {
             ...(creds.SOGNI_API_KEY
               ? { apiKey: creds.SOGNI_API_KEY, authType: 'apiKey' }
               : {
-                  username: creds.SOGNI_USERNAME,
-                  password: creds.SOGNI_PASSWORD,
-                  authType: 'token'
-                })
+                username: creds.SOGNI_USERNAME,
+                password: creds.SOGNI_PASSWORD,
+                authType: 'token'
+              })
           });
           await client2.connect();
 
@@ -3334,12 +3580,12 @@ async function main() {
           log(`Saved to ${options.output}`);
         }
       }
-      
+
       // Output result
       if (options.json) {
         const output = {
           success: true,
-          type: options.video ? 'video' : 'image',
+          type: options.audio ? 'audio' : (options.video ? 'video' : 'image'),
           prompt: options.prompt,
           model: options.model,
           width: options.width,
@@ -3351,6 +3597,10 @@ async function main() {
           localPath: options.output || null,
           tokenType: options.tokenType || 'spark'
         };
+        if (options.audio) {
+          output.workflow = options.audioWorkflow;
+          output.duration = options.duration;
+        }
         if (options.outputFormat) {
           output.outputFormat = options.outputFormat;
         }
@@ -3420,7 +3670,7 @@ async function main() {
     } else {
       throw new Error('No output generated - may have been filtered');
     }
-    
+
   } catch (error) {
     exitCode = 1;
     const shouldJson = options.json || IS_OPENCLAW_INVOCATION;
@@ -3475,7 +3725,7 @@ async function main() {
           new Promise(resolve => setTimeout(resolve, 1000))
         ]);
       }
-    } catch (e) {}
+    } catch (e) { }
   }
   process.exit(exitCode);
 }

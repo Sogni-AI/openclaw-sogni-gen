@@ -83,6 +83,15 @@ class SogniClientWrapper extends EventEmitter {
     return { project: { id: 'proj-1' }, videoUrls: ['https://example.com/video.mp4'] };
   }
 
+  async createAudioProject(config) {
+    const state = getState();
+    this.lastAudioProject = config;
+    state.lastAudioProject = config;
+    persistState();
+    this._emitJobs('audioUrl', config.numberOfMedia ?? 1, config.seed);
+    return { project: { id: 'proj-1' }, audioUrls: ['https://example.com/audio.mp3'] };
+  }
+
   async getBalance() {
     return {
       sogni: 100,
