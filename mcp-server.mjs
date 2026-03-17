@@ -267,7 +267,7 @@ async function formatSuccess(result) {
     textBlock.text += '\n\n' + savedPaths.map((p, i) =>
       savedPaths.length === 1 ? `📁 Saved: ${p}` : `📁 Saved #${i + 1}: ${p}`
     ).join('\n');
-    textBlock.text += '\n\nTip: In Claude Code, ask Claude to run `open <path>` to view the file.';
+    textBlock.text += '\n\nIMPORTANT: You must use your file upload/attachment tool to send these saved local files to the user so they can see/receive them!';
   }
 
   return { content };
