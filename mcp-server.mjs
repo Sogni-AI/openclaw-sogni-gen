@@ -678,7 +678,7 @@ The face likeness is preserved while applying the style from the prompt.`,
     },
   },
   {
-    name: 'generate_song',
+    name: 'generate_music',
     description: `Generate audio or music using Sogni AI's decentralized GPU network.
 
 Workflows:
@@ -693,11 +693,6 @@ Minimum duration is 10 seconds. Cost: Uses Spark tokens. Claim 50 free daily Spa
         prompt: {
           type: 'string',
           description: 'Base description of the audio/song. Can be empty if other parameters (genre/mood/lyrics/etc.) are provided.',
-        },
-        workflow: {
-          type: 'string',
-          enum: ['music'],
-          description: 'Audio workflow (default: music)',
         },
         model: {
           type: 'string',
@@ -715,10 +710,6 @@ Minimum duration is 10 seconds. Cost: Uses Spark tokens. Claim 50 free daily Spa
           type: 'string',
           description: 'Speed or BPM (e.g. "fast", "slow", "128bpm")',
         },
-        instruments: {
-          type: 'string',
-          description: 'Target instruments (e.g. "piano, violin", "heavy drums")',
-        },
         lyrics: {
           type: 'string',
           description: 'Words or lyrics to include in the track',
@@ -730,59 +721,7 @@ Minimum duration is 10 seconds. Cost: Uses Spark tokens. Claim 50 free daily Spa
         duration: {
           type: 'number',
           description: 'Target length of the audio in seconds. Minimum: 10, Default: 30.',
-        },
-        length: {
-          type: 'number',
-          description: 'Alias for duration. Target length of the audio in seconds. Default: 30.',
-        },
-        count: {
-          type: 'number',
-          description: 'How many variations to generate (default: 1).',
-        },
-        seed: {
-          type: 'number',
-          description: 'Optional seed for deterministic generation. Using the same seed with the same prompt will produce similar results.',
-        },
-        bpm: {
-          type: 'number',
-          description: 'Beats per minute (30-300, default: 120)',
-        },
-        time_signature: {
-          type: 'string',
-          description: 'Time signature (2, 3, 4, or 6 - default: 4)',
-        },
-        language: {
-          type: 'string',
-          description: 'Lyrics language code (default: en)',
-        },
-        keyscale: {
-          type: 'string',
-          description: 'Key/scale setting (e.g., "C major", "A minor")',
-        },
-        composer_mode: {
-          type: 'boolean',
-          description: 'Enable AI composer mode for higher quality (default: true)',
-        },
-        prompt_strength: {
-          type: 'number',
-          description: 'How closely to follow the prompt (0-10, default: 2.0)',
-        },
-        creativity: {
-          type: 'number',
-          description: 'Composition variation / temperature (0-2, default: 0.85)',
-        },
-        shift: {
-          type: 'number',
-          description: 'Distribution of denoising effort (1-6, default: 3)',
-        },
-        output_format: {
-          type: 'string',
-          description: 'Output audio format (mp3, flac, wav - default: mp3)',
-        },
-        output: {
-          type: 'string',
-          description: 'Optional local file path to save the generated audio (e.g., "my-song.mp3").',
-        },
+        }
       },
       required: ['prompt'],
     },
@@ -993,7 +932,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return await handleGenerateImage(params);
       case 'generate_video':
         return await handleGenerateVideo(params);
-      case 'generate_song':
+      case 'generate_music':
         return await handleGenerateSong(params);
       case 'edit_image':
         return await handleEditImage(params);
