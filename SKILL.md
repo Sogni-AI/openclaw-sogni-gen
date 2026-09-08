@@ -301,8 +301,9 @@ sogni-agent doctor --json
 
 - To isolate an object in an image — a mask, or the subject cut out on transparency — use `sam3_image_segment_bf16` with a `sam3Prompt`. It is promptless in the ordinary sense: the selection comes from `text`, click `points`, or `boxes`, never from `positivePrompt`. Never route a "remove the background" or "select the X" request through `edit_image` or `refine_result`, which regenerate pixels instead of selecting them.
 - Set `applyMask: true` when the result feeds a composite; leave it off when you need the black-and-white mask itself. If a text prompt matches more instances than intended, the result's `maskSelections` reports each one's score and bounds — re-run with `maxInstances: 1` or a box around the intended one rather than accepting a merged shape.
-- To turn one image into a textured 3D model, use `pixal3d_int8_i23d` with a `startingImage` and a prompt naming the object. The artifact is a binary GLB, not a picture; never display or post-process it as an image. Set `meshTargetFaces` well below the 700000 default for anything headed into a real-time engine.
-- Both are flat-priced per request, so resolution and step count change neither cost nor result. Details and full option ranges in [`references/models.md`](./references/models.md).
+- To turn one image into a textured 3D model, use `pixal3d_int8_i23d` with a `startingImage` and **no prompt** — the default graph isolates the subject on its own. Only the `templateVariant: 'i23d'` variant takes a `positivePrompt`, and there the prompt names which object to pull out of a busy scene. The artifact is a binary GLB, not a picture; never display or post-process it as an image. Set `meshTargetFaces` well below the 700000 default for anything headed into a real-time engine.
+- `birefnet_image_background_removal_fp16` (prompt-free background removal) is **not yet routable** — it still needs a Comfy Worker release, so do not offer it. Remove backgrounds with SAM 3 and `applyMask: true` in the meantime.
+- All are flat-priced per request, so resolution and step count change neither cost nor result. Details and full option ranges in [`references/models.md`](./references/models.md).
 
 ### Photobooth vs. context editing
 

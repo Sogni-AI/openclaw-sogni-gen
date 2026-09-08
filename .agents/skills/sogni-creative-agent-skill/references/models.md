@@ -133,12 +133,13 @@ support up to 3; Krea identity edit models support up to 2).
 | Model | Speed | Use Case |
 |-------|-------|----------|
 | `sam3_image_segment_bf16` | Very fast | SAM 3 object selection from one starting image: text, click points, or boxes in, one mask or cutout out |
-| `pixal3d_int8_i23d` | Slow (~80-130s) | Prompt-guided single-image reconstruction to a textured GLB |
+| `pixal3d_int8_i23d` | Slow (~120-170s) | Single-image reconstruction to a textured GLB |
+| `birefnet_image_background_removal_fp16` | Very fast (~1s warm) | Prompt-free background removal — **not yet available**, see below |
 
-Neither is a text-to-image model. Both always require a `startingImage`, and
-both are priced flat per request, so resolution and step count change nothing.
-None of the usual generation controls apply either: leave steps, guidance,
-sampler, scheduler, and the negative prompt unset for both.
+None is a text-to-image model. All always require a `startingImage`, and all are
+priced flat per request, so resolution and step count change nothing. None of
+the usual generation controls apply either: leave steps, guidance, sampler,
+scheduler, and the negative prompt unset for every one of them.
 
 ### SAM 3 segmentation (`sam3_image_segment_bf16`)
 
@@ -186,13 +187,24 @@ the one you actually wanted.
 
 ### Pixal3D image-to-3D (`pixal3d_int8_i23d`)
 
-Flat $0.42 per reconstruction. Takes one `startingImage` plus a
-`positivePrompt` naming the object to reconstruct, and returns a binary GLB with
-4K base colour and UV atlas, 2K normal, and 1K ambient occlusion maps baked in.
-Output is a 3D model, not a picture — do not treat the artifact as an image.
+$0.42 per reconstruction at the default shape resolution of 1536, $0.30 at 1024.
+Takes one `startingImage` and returns a binary GLB — a TRELLIS.2 mesh of roughly
+695,000 triangles with a full PBR set baked in: 4K base colour and UV atlas, 4K
+metallic-roughness, 2K normal, and 1K ambient occlusion. Output is a 3D model,
+not a picture — do not treat the artifact as an image.
 
-The prompt selects the object; it does not restyle it, so describing a desired
-appearance changes nothing. Use a sharp source photo with the whole object
+**The default takes no prompt.** One workflow id serves two graphs, and the
+flagged default is now the BiRefNet one, which isolates the subject
+automatically. Sending a prompt to it does nothing.
+
+| Variant | `templateVariant` | Prompt | Use it when |
+|---------|-------------------|--------|-------------|
+| BiRefNet (default) | omit, or `i23d-birefnet` | none | The image has one clear subject |
+| Prompted | `i23d` | `positivePrompt`, required | A busy scene, where SAM 3 has to pick one object out of several |
+
+On the prompted variant the prompt NAMES the object to reconstruct — "the red
+ceramic teapot" — it does not restyle it, so describing a desired appearance
+changes nothing. Either way, use a sharp source photo with the whole object
 visible and minimal occlusion.
 
 Five generation options may only *reduce* work. Each maximum is the shipped
@@ -210,6 +222,24 @@ simply produces a lighter asset:
 `meshTargetFaces` is the one worth setting deliberately. The 700,000-triangle
 default is far heavier than a real-time engine wants, so asking for less usually
 yields a *more* useful asset. Sampling steps are deliberately not exposed.
+
+### BiRefNet background removal (`birefnet_image_background_removal_fp16`)
+
+> **BiRefNet is not yet routable.** It exists only in unpushed local commits
+> across ComfyUI, sogni-socket and sogni-client and still needs a Comfy Worker
+> release, so no public model is registered on the Supernet and a job for it
+> cannot be dispatched. Do not offer it to a user as an available capability
+> until `sogni-agent --search-models birefnet` returns it. SAM 3 and Pixal3D are
+> routable today.
+
+When it ships: flat $0.005 (1 Spark) per image at any source size, about 1.0s on
+a warm worker. It is **prompt-free** — there is no concept to name, it simply
+separates foreground from background — and returns either the foreground matte
+or, with `applyMask`, the source image carrying that matte in alpha. Output
+dimensions always match the input.
+
+Until then, `sam3_image_segment_bf16` is the way to remove a background: give it
+a `text` prompt naming the subject to keep, with `applyMask: true`.
 
 ## Music models
 
@@ -799,7 +829,8 @@ model recommendations.
 | Uncensored identity-preserving Krea edits | `dark_beast_krea2_identity_edit_v1_2` |
 | Photobooth face transfer | `coreml-sogniXLturbo_alpha1_ad` |
 | Select or cut out an object in an image | `sam3_image_segment_bf16` |
-| Turn one image into a textured 3D model (GLB) | `pixal3d_int8_i23d` |
+| Remove a background | `sam3_image_segment_bf16` with `text` naming the subject and `applyMask: true` (`birefnet_image_background_removal_fp16` is not yet routable) |
+| Turn one image into a textured 3D model (GLB) | `pixal3d_int8_i23d`, no prompt on the default graph |
 | Direct music generation | `ace_step_1.5_xl_turbo` (or `--music-model turbo`) |
 | Music with stronger lyric handling | `ace_step_1.5_xl_sft` (or `--music-model sft`) |
 | Text-to-video with native dialogue/audio | `ltx25` |
