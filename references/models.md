@@ -135,8 +135,10 @@ support up to 3; Krea identity edit models support up to 2).
 | `sam3_image_segment_bf16` | Very fast | SAM 3 object selection from one starting image: text, click points, or boxes in, one mask or cutout out |
 | `pixal3d_int8_i23d` | Slow (~80-130s) | Prompt-guided single-image reconstruction to a textured GLB |
 
-Neither is a text-to-image model. Both take a `startingImage` and both are
-priced flat per request, so resolution and step count change nothing.
+Neither is a text-to-image model. Both always require a `startingImage`, and
+both are priced flat per request, so resolution and step count change nothing.
+None of the usual generation controls apply either: leave steps, guidance,
+sampler, scheduler, and the negative prompt unset for both.
 
 ### SAM 3 segmentation (`sam3_image_segment_bf16`)
 
@@ -154,6 +156,12 @@ what you want in one of three ways, passed as `sam3Prompt`:
 
 Text and point prompts cannot be combined; the underlying model has no entry
 point that accepts both. A negative box likewise requires a text prompt.
+
+However you select, you are naming the object to isolate rather than describing
+a desired output — "the red ceramic teapot", not "a beautiful teapot".
+Selection is deterministic for a given image and prompt, so re-rolling the seed
+changes nothing. The artifact is a mask or a cutout, never a generated image: it
+cannot be upscaled, enhanced, or refined.
 
 Other `sam3Prompt` fields:
 
@@ -182,6 +190,10 @@ Flat $0.42 per reconstruction. Takes one `startingImage` plus a
 `positivePrompt` naming the object to reconstruct, and returns a binary GLB with
 4K base colour and UV atlas, 2K normal, and 1K ambient occlusion maps baked in.
 Output is a 3D model, not a picture — do not treat the artifact as an image.
+
+The prompt selects the object; it does not restyle it, so describing a desired
+appearance changes nothing. Use a sharp source photo with the whole object
+visible and minimal occlusion.
 
 Five generation options may only *reduce* work. Each maximum is the shipped
 default, so the flat price is a guaranteed upper bound and a smaller value
