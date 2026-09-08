@@ -297,6 +297,13 @@ sogni-agent doctor --json
 - For a pure resolution increase that must preserve the source composition, use `--upscale` in direct CLI mode or `upscale_image` on hosted tool surfaces. RTX VSR is deterministic and promptless: never invent a prompt, and never route this request through `restore_photo`, `refine_result`, or `edit_image`.
 - `--upscale-scale` accepts 2, 3, or 4; `--target-longest-edge` overrides it. The CLI derives an aspect-preserving target box and aligns both edges to the worker's 8-pixel step. Both output edges must remain within 512–15360px. Targets above 7680px use JPG so 16K results remain practical to transfer and display. If a scale would make the short edge smaller than 512px, the CLI reports the minimum valid `--target-longest-edge` instead of stretching the image; aspect ratios that cannot fit the box are rejected.
 
+### Segmentation and 3D reconstruction
+
+- To isolate an object in an image — a mask, or the subject cut out on transparency — use `sam3_image_segment_bf16` with a `sam3Prompt`. It is promptless in the ordinary sense: the selection comes from `text`, click `points`, or `boxes`, never from `positivePrompt`. Never route a "remove the background" or "select the X" request through `edit_image` or `refine_result`, which regenerate pixels instead of selecting them.
+- Set `applyMask: true` when the result feeds a composite; leave it off when you need the black-and-white mask itself. If a text prompt matches more instances than intended, the result's `maskSelections` reports each one's score and bounds — re-run with `maxInstances: 1` or a box around the intended one rather than accepting a merged shape.
+- To turn one image into a textured 3D model, use `pixal3d_int8_i23d` with a `startingImage` and a prompt naming the object. The artifact is a binary GLB, not a picture; never display or post-process it as an image. Set `meshTargetFaces` well below the 700000 default for anything headed into a real-time engine.
+- Both are flat-priced per request, so resolution and step count change neither cost nor result. Details and full option ranges in [`references/models.md`](./references/models.md).
+
 ### Photobooth vs. context editing
 
 - `--photobooth` is **face-reference generation**, not full-image editing: it generates a *new* portrait from a face photo and may change pose, clothing, background, framing, and composition. Use it when the user explicitly asks for photobooth/face-transfer, a new portrait/headshot from their face, or to place their face into a different concept. Cannot be combined with `--video` or `-c/--context`. Tune with `--cn-strength` (default 0.8) and `--cn-guidance-end` (default 0.3).
@@ -457,7 +464,7 @@ Eligible Sogni-hosted renders use Unlimited coverage when active; otherwise rend
 | [`references/loop-maker.md`](./references/loop-maker.md) | One-click image-folder loops with visual deduplication, direct LTX first/last-frame clips, music, and verification |
 | [`references/hosted-api.md`](./references/hosted-api.md) | `--api-chat`, `--durable-chat`, `--api-workflow`, workflow templates, replays, Seedance reference modes, cost controls |
 | [`references/seamless-tiling.md`](./references/seamless-tiling.md) | Seamless repeating patterns, wallpapers, tiling textures, Escher tessellations |
-| [`references/models.md`](./references/models.md) | Choosing models, sizing/divisibility rules, image edit reference limits, music model options |
+| [`references/models.md`](./references/models.md) | Choosing models, sizing/divisibility rules, image edit reference limits, music model options, SAM 3 segmentation and Pixal3D 3D options |
 | [`references/krea2-loras.md`](./references/krea2-loras.md) | The 25 Krea 2 LoRAs: IDs, strength ranges, bipolar directions, community fine-tunes, live `--list-loras` discovery |
 | [`references/h3-video-loras.md`](./references/h3-video-loras.md) | MiniMax H3 video LoRAs: per-mode availability, trigger words, positive-only strength bands, live catalog discovery |
 | [`references/personas-memory.md`](./references/personas-memory.md) | Persona CRUD/voice cloning, multi-persona scenes, memories, personality, style transfer, photo restoration |

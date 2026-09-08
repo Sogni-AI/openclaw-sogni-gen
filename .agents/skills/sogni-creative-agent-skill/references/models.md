@@ -128,6 +128,77 @@ edge, max `3:1` aspect ratio, and total pixels from `655,360` through
 editing with `gpt-image-2`, you can pass up to 16 context images (Qwen models
 support up to 3; Krea identity edit models support up to 2).
 
+## Utility and 3D models
+
+| Model | Speed | Use Case |
+|-------|-------|----------|
+| `sam3_image_segment_bf16` | Very fast | SAM 3 object selection from one starting image: text, click points, or boxes in, one mask or cutout out |
+| `pixal3d_int8_i23d` | Slow (~80-130s) | Prompt-guided single-image reconstruction to a textured GLB |
+
+Neither is a text-to-image model. Both take a `startingImage` and both are
+priced flat per request, so resolution and step count change nothing.
+
+### SAM 3 segmentation (`sam3_image_segment_bf16`)
+
+Flat $0.005 (1 Spark) per request at any source size. Returns exactly one
+artifact at the source dimensions and ignores width/height entirely. Select
+what you want in one of three ways, passed as `sam3Prompt`:
+
+- `text` — a noun phrase, up to 240 characters. Selects every instance of that
+  concept.
+- `points` — up to 32 `{x, y, label}` clicks, coordinates normalized 0-1
+  against the original image, `label` either `positive` or `negative`.
+- `boxes` — up to 16 `{x0, y0, x1, y1}` boxes, also normalized 0-1. With a text
+  prompt a box may carry `label: 'negative'` to exclude one instance ("every
+  dog except this one").
+
+Text and point prompts cannot be combined; the underlying model has no entry
+point that accepts both. A negative box likewise requires a text prompt.
+
+Other `sam3Prompt` fields:
+
+- `applyMask` — return the selection cut out of the source as an RGBA PNG with
+  the mask in alpha, instead of a black-and-white mask. Usually what you want if
+  the output is going into a composite. Defaults to `false`.
+- `maxInstances` — 1 to 16. Keeps only the highest-scoring N selections. With
+  `text`, `maxInstances: 1` returns just the strongest match instead of every
+  match merged into one shape; with `points` it picks among the model's
+  whole/part/subpart candidates for the clicked object.
+- `threshold` — 0 to 1, default 0.5. One detection filter on both paths. If
+  nothing scores above it the job fails and the error reports the best score
+  seen, so raise or lower it from there rather than guessing.
+- `multimask` — point prompts only; rejected with a text prompt.
+
+The result carries per-selection detail: `maskDetectedCount`,
+`maskReturnedCount`, and `maskSelections` with each selection's `score`, `box`
+(normalized `[x0, y0, x1, y1]`), `coverage`, and whether it was `included`. Use
+it to tell a confident selection from a marginal one, and to discover that a
+concept matched more instances than you expected — then re-run with a box around
+the one you actually wanted.
+
+### Pixal3D image-to-3D (`pixal3d_int8_i23d`)
+
+Flat $0.42 per reconstruction. Takes one `startingImage` plus a
+`positivePrompt` naming the object to reconstruct, and returns a binary GLB with
+4K base colour and UV atlas, 2K normal, and 1K ambient occlusion maps baked in.
+Output is a 3D model, not a picture — do not treat the artifact as an image.
+
+Five generation options may only *reduce* work. Each maximum is the shipped
+default, so the flat price is a guaranteed upper bound and a smaller value
+simply produces a lighter asset:
+
+| Option | Range | Default |
+|--------|-------|---------|
+| `meshTargetFaces` | 5000-700000 | 700000 |
+| `textureSize` | 1024-4096 | 4096 |
+| `normalMapSize` | 512-2048 | 2048 |
+| `ambientOcclusionSize` | 256-1024 | 1024 |
+| `shapeResolution` | 1024-1536 | 1536 |
+
+`meshTargetFaces` is the one worth setting deliberately. The 700,000-triangle
+default is far heavier than a real-time engine wants, so asking for less usually
+yields a *more* useful asset. Sampling steps are deliberately not exposed.
+
 ## Music models
 
 | Model | Use Case |
@@ -715,6 +786,8 @@ model recommendations.
 | Identity-preserving Krea image edits | `krea2_identity_edit_v1_2` |
 | Uncensored identity-preserving Krea edits | `dark_beast_krea2_identity_edit_v1_2` |
 | Photobooth face transfer | `coreml-sogniXLturbo_alpha1_ad` |
+| Select or cut out an object in an image | `sam3_image_segment_bf16` |
+| Turn one image into a textured 3D model (GLB) | `pixal3d_int8_i23d` |
 | Direct music generation | `ace_step_1.5_xl_turbo` (or `--music-model turbo`) |
 | Music with stronger lyric handling | `ace_step_1.5_xl_sft` (or `--music-model sft`) |
 | Text-to-video with native dialogue/audio | `ltx25` |
