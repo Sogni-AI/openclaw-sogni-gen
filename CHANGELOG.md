@@ -1,3 +1,10 @@
+# [3.40.0](https://github.com/Sogni-AI/sogni-creative-agent-skill/compare/v3.39.1...v3.40.0) (2026-09-09)
+
+
+### Features
+
+* **skill:** publish current generation guidance ([ff83933](https://github.com/Sogni-AI/sogni-creative-agent-skill/commit/ff83933ae87074c6b175358fcd974adb785da0c0))
+
 ## [3.39.1](https://github.com/Sogni-AI/sogni-creative-agent-skill/compare/v3.39.0...v3.39.1) (2026-09-02)
 
 
