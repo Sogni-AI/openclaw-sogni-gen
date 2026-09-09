@@ -102,6 +102,54 @@ Four SAM 3 failures worth knowing before you spend anything:
 
 ### Crossings between scenes
 
+**Describe a journey, never a transformation.** This is the single biggest
+quality lever on a crossing and it is easy to get wrong. Write "the cabin drops
+down the cable, cloud tearing past the windows, until the platform slides into
+frame" and you get travel. Write "the cloud thins into rainforest mist" or "the
+street gives way to the hill" and you get a dissolve — the model reads
+*becomes*, *gives way to*, *opens out into* as an instruction to blend, and no
+amount of "no crossfade" elsewhere in the prompt will override a concrete
+instruction to morph.
+
+The tell that a crossing is about to fail is that the journey is *impossible*:
+into a telescope barrel, into a phone earpiece, into a jukebox cabinet, through
+a mirror, into a slot in a rack. With no space to move through, blending is all
+the model has left. Give it real geography instead — go *around* rather than
+*through*. A telescope crossing works if the camera climbs the barrel and keeps
+going up through actual cloud to the observatory; it dissolves if it goes in at
+the eyepiece.
+
+The reliable trick for a crossing that really is a portal — under a basket lid,
+into a diving bell — is to let the object physically swallow the lens. The lid
+swings down across frame, it is dark for a beat, and the camera comes out the
+other side. That is occlusion, which is travel, and it never reads as a fade.
+
+Distance matters as much as wording. A crossing is about five seconds; asking
+for rainforest canopy to open ocean to Manhattan in that time makes the model
+stall and go to mush even when every verb is a travel verb. Cut the geography
+until the move is one continuous gesture.
+
+**No frame-statistics metric can detect a fade. Look at the clip.** This is
+worth stating flatly because two plausible metrics were tried and both inverted:
+
+- *Edge energy at the midpoint against the ends.* Reads as a softness detector,
+  but fast camera travel with objects whipping past the lens produces real
+  motion blur, which drops edge energy exactly as a dissolve does.
+- *Correlating the middle against both ends and taking the lower.* Reads as a
+  superimposition detector, but two scenes that simply look alike — two rainy
+  streets — correlate highly with nothing blended, and a deliberate dark
+  occlusion beat correlates with neither end while being exactly right.
+
+Combining them does not help, because the occlusion the crossing wants — a lid
+swinging over the lens, a bell going down into dark water, a turn into an
+unlit stairwell — is, in frame statistics, indistinguishable from mush: a
+middle that resembles neither end and carries little detail. Both rewrites
+measured *worse* than the transformations they replaced and both were plainly
+better on screen. Extract a strip of eight frames across the whole clip and
+look at it. One picture smeared or blocked is travel; two pictures
+superimposed is a fade. That judgement takes seconds and is the only one that
+has been right.
+
 Anchor first *and* last frame on the exact retained stills. That is what makes a
 journey feel continuous instead of like a cut: the clip opens on the frame the
 visitor was already looking at and lands on the one they are about to explore.
