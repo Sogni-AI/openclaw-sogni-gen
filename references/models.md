@@ -134,7 +134,7 @@ support up to 3; Krea identity edit models support up to 2).
 |-------|-------|----------|
 | `sam3_image_segment_bf16` | Very fast | SAM 3 object selection from one starting image: text, click points, or boxes in, one mask or cutout out |
 | `pixal3d_int8_i23d` | Slow (~120-170s) | Single-image reconstruction to a textured GLB |
-| `birefnet_image_background_removal_fp16` | Very fast (~1s warm) | Prompt-free background removal — **not yet available**, see below |
+| `birefnet_image_background_removal_fp16` | Very fast (~1s warm) | Prompt-free background removal, soft matte — the better cut-out when the subject is clear |
 
 None is a text-to-image model. All always require a `startingImage`, and all are
 priced flat per request, so resolution and step count change nothing. None of
@@ -225,21 +225,52 @@ yields a *more* useful asset. Sampling steps are deliberately not exposed.
 
 ### BiRefNet background removal (`birefnet_image_background_removal_fp16`)
 
-> **BiRefNet is not yet routable.** It exists only in unpushed local commits
-> across ComfyUI, sogni-socket and sogni-client and still needs a Comfy Worker
-> release, so no public model is registered on the Supernet and a job for it
-> cannot be dispatched. Do not offer it to a user as an available capability
-> until `sogni-agent --search-models birefnet` returns it. SAM 3 and Pixal3D are
-> routable today.
-
-When it ships: flat $0.005 (1 Spark) per image at any source size, about 1.0s on
+Flat $0.005 (1 Spark) per image at any source size, about 1.0s on
 a warm worker. It is **prompt-free** — there is no concept to name, it simply
 separates foreground from background — and returns either the foreground matte
 or, with `applyMask`, the source image carrying that matte in alpha. Output
 dimensions always match the input.
 
-Until then, `sam3_image_segment_bf16` is the way to remove a background: give it
-a `text` prompt naming the subject to keep, with `applyMask: true`.
+It is still being seeded across the fleet, so it can have only a couple of
+workers and a job may queue behind other people's work. That is queueing, not
+failure — do not add a client-side timeout and resubmit, which only duplicates
+work that was always going to complete.
+
+### Choosing between SAM 3 and BiRefNet
+
+They are not interchangeable, and the difference decides the quality of every
+cut-out. Use both when the job needs both.
+
+| | SAM 3 | BiRefNet |
+|---|---|---|
+| What it does | **Selects an object** you name, click, or box | **Separates foreground from background** |
+| Prompt | Required — text, points, or boxes | None. There is nothing to name |
+| Knows which object you meant | Yes | No — it takes whatever is in front |
+| Output | Strictly **binary** mask: two levels, hard stair-stepped edges | True **soft matte**: 256 levels, antialiased edges, real partial alpha |
+| Best at | Picking one thing out of a busy scene | Clean edges on a clear subject: hair, fur, fabric, fine detail |
+
+**Use SAM 3** when the picture contains several things and you need a specific
+one: "the telescope, not the observatory around it".
+
+**Use BiRefNet** when the picture has one clear subject and what you want is a
+clean cut-out — a character on a backdrop, a product shot, anything where the
+edge quality is the point. SAM 3's edges are noticeably worse here: on a
+hooded figure it left specks of backdrop above the head, bit notches out of the
+cloak, and left the hem ragged where BiRefNet's matte was clean.
+
+**Use both** for the best result on an object inside a busy scene: SAM 3 to
+decide *which* object and where it sits, its bounding box to crop the original
+down to that object, then BiRefNet to matte the crop — where the thing being
+separated is now the only thing in frame, which is the situation it is best at.
+
+**A gotcha worth knowing before you write the code.** SAM 3 returns a binary
+mask, so testing a pixel for pure white is the same as testing whether it is
+selected. BiRefNet does not: its matte is soft, and a figure covering 48% of the
+frame can have under 5% of it at exactly 255. Code that thresholds on pure white
+will silently measure a fraction of the real coverage and crop the subject to a
+sliver. Threshold at half-opaque instead — identical on a binary mask, correct
+on a soft one — and composite with the matte's full range so the antialiased
+edges survive.
 
 ## Music models
 
