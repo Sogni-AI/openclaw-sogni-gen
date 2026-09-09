@@ -55,6 +55,30 @@ its exact bytes and its hash. Never re-save, re-crop or screenshot it, and never
 substitute a frame extracted from a video for it — a mask traced against one
 copy will not fit another.
 
+### Where the character goes in the shot
+
+**Do not put the character front, centre, large and looking at the camera.**
+This is the easiest mistake to make and the hardest to undo, because it is
+usually written once into a shared identity block and then inherited by every
+scene in the world. One build asked for "this single mascot visibly present and
+full-bodied, around one third of the picture height" and then added "stands
+center foreground" to each scene on top of it. Twenty-odd scenes came back as
+the same portrait with different wallpaper. Mark: "NEVER PLACE the main
+character front and center looking at the viewer in every scene ... the main
+character should move in depth and position and not take up so much of the
+screen and not always be looking at the viewer."
+
+Compose around the *place* and let the character be in it: off to one side,
+well back in depth, small against the scale, seen from the back or three-
+quarters, occupied with something, entering or leaving. Vary it scene to scene.
+A large camera-facing foreground pose is a choice to make once, for the scene
+where it is the point — never the default.
+
+Identity and framing are separate instructions, and only the framing should
+move. Keep every clause about fur, glasses, nose, horn and proportions exactly
+as it is; a character whose placement varies is still the same character, and
+loosening the identity to get variety costs the thing the world is built on.
+
 ### Keeping a character
 
 A name is not an identity lock. `krea2_identity_edit_sogni_v0_3_alpha` takes
