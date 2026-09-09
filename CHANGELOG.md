@@ -1,8 +1,3 @@
-## [3.39.2] - 2026-09-04
-
-- Update the client stack so canceled generation waits settle and recovered failures carry a useful error.
-- Include the current MiniMax H3 recipe guidance and rounded Wan 3.0 Enhanced pricing references.
-
 ## [3.39.1](https://github.com/Sogni-AI/sogni-creative-agent-skill/compare/v3.39.0...v3.39.1) (2026-09-02)
 
 
@@ -164,12 +159,6 @@
 * add Hermes Skills Hub distribution ([#30](https://github.com/Sogni-AI/sogni-creative-agent-skill/issues/30)) ([52329e8](https://github.com/Sogni-AI/sogni-creative-agent-skill/commit/52329e81f5f89660fe71bb88e5a8a13f24ef789a))
 * **loras:** add LoRA catalog discovery to the CLI ([8c50259](https://github.com/Sogni-AI/sogni-creative-agent-skill/commit/8c502597145ec9a261f2e1a8d03ea2688df35505))
 * **upscale:** support NVIDIA RTX VSR through 16K ([d6ae213](https://github.com/Sogni-AI/sogni-creative-agent-skill/commit/d6ae2138833dccb88b5eac53a4878e7f1117e9eb))
-
-## Unreleased
-
-### Features
-
-* **upscale:** support NVIDIA RTX VSR output through a 15,360px longest edge (16K profile), with JPG output above 8K
 
 # [3.31.1](https://github.com/Sogni-AI/sogni-creative-agent-skill/compare/v3.31.0...v3.31.1) (2026-08-14)
 

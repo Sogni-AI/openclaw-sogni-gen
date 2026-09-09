@@ -35,6 +35,7 @@ const GATING_POLICIES = [
                 "sound_to_video",
                 "video_to_video",
                 "generate_music",
+                "generate_speech",
                 "extend_video",
                 "replace_video_segment",
                 "overlay_video",
@@ -69,6 +70,7 @@ const GATING_POLICIES = [
                 "sound_to_video",
                 "video_to_video",
                 "generate_music",
+                "generate_speech",
                 "extend_video",
                 "replace_video_segment",
                 "overlay_video",
@@ -102,6 +104,7 @@ const GATING_POLICIES = [
                 "sound_to_video",
                 "video_to_video",
                 "generate_music",
+                "generate_speech",
                 "extend_video",
                 "replace_video_segment",
                 "overlay_video",
@@ -136,6 +139,7 @@ const GATING_POLICIES = [
                 "sound_to_video",
                 "video_to_video",
                 "generate_music",
+                "generate_speech",
                 "extend_video",
                 "replace_video_segment",
                 "overlay_video",
@@ -500,6 +504,15 @@ const REPAIR_RECIPES = [
         "repairNoteTemplate": "I need more details before I can run {{toolName}}. {{missingDetail}}"
     },
     {
+        "recipeId": "generate_speech.user_input_incomplete",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
+        "errorCode": "USER_INPUT_INCOMPLETE",
+        "mode": "stopAndAsk",
+        "maxRetries": 0,
+        "repairNoteTemplate": "I need more details before I can run {{toolName}}. {{missingDetail}}"
+    },
+    {
         "recipeId": "extend_video.user_input_incomplete",
         "version": "1.0.0",
         "toolName": "extend_video",
@@ -671,6 +684,15 @@ const REPAIR_RECIPES = [
         "repairNoteTemplate": "You have hit the credit limit for this turn. Buy Spark Packs to continue: https://docs.sogni.ai/pricing/#spark-packs"
     },
     {
+        "recipeId": "generate_speech.cost_limit_exceeded",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
+        "errorCode": "COST_LIMIT_EXCEEDED",
+        "mode": "stopAndAsk",
+        "maxRetries": 0,
+        "repairNoteTemplate": "You have hit the credit limit for this turn. Buy Spark Packs to continue: https://docs.sogni.ai/pricing/#spark-packs"
+    },
+    {
         "recipeId": "extend_video.cost_limit_exceeded",
         "version": "1.0.0",
         "toolName": "extend_video",
@@ -836,6 +858,15 @@ const REPAIR_RECIPES = [
         "recipeId": "generate_music.asset_not_found",
         "version": "1.0.0",
         "toolName": "generate_music",
+        "errorCode": "ASSET_NOT_FOUND",
+        "mode": "stopAndAsk",
+        "maxRetries": 0,
+        "repairNoteTemplate": "I cannot find the asset that {{toolName}} needs. {{message}} Which uploaded or generated asset did you want?"
+    },
+    {
+        "recipeId": "generate_speech.asset_not_found",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
         "errorCode": "ASSET_NOT_FOUND",
         "mode": "stopAndAsk",
         "maxRetries": 0,
@@ -1040,6 +1071,15 @@ const REPAIR_RECIPES = [
         "repairNoteTemplate": "{{toolName}} could not run: {{message}}"
     },
     {
+        "recipeId": "generate_speech.workflow_validation_failed",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
+        "errorCode": "WORKFLOW_VALIDATION_FAILED",
+        "mode": "stopAndAsk",
+        "maxRetries": 0,
+        "repairNoteTemplate": "{{toolName}} could not run: {{message}}"
+    },
+    {
         "recipeId": "extend_video.workflow_validation_failed",
         "version": "1.0.0",
         "toolName": "extend_video",
@@ -1211,6 +1251,15 @@ const REPAIR_RECIPES = [
         "repairNoteTemplate": "{{toolName}} rejected the arguments: {{message}}"
     },
     {
+        "recipeId": "generate_speech.parameter_invalid",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
+        "errorCode": "PARAMETER_INVALID",
+        "mode": "stopAndAsk",
+        "maxRetries": 0,
+        "repairNoteTemplate": "{{toolName}} rejected the arguments: {{message}}"
+    },
+    {
         "recipeId": "overlay_video.parameter_invalid",
         "version": "1.0.0",
         "toolName": "overlay_video",
@@ -1349,6 +1398,15 @@ const REPAIR_RECIPES = [
         "recipeId": "generate_music.gpu_worker_failed",
         "version": "1.0.0",
         "toolName": "generate_music",
+        "errorCode": "GPU_WORKER_FAILED",
+        "mode": "stopAndAsk",
+        "maxRetries": 0,
+        "repairNoteTemplate": "The {{toolName}} worker failed. {{message}} Want me to try again or change the request?"
+    },
+    {
+        "recipeId": "generate_speech.gpu_worker_failed",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
         "errorCode": "GPU_WORKER_FAILED",
         "mode": "stopAndAsk",
         "maxRetries": 0,
@@ -1526,6 +1584,15 @@ const REPAIR_RECIPES = [
         "repairNoteTemplate": "The model {{toolName}} wanted is offline. {{message}} Pick a different model or try again later."
     },
     {
+        "recipeId": "generate_speech.model_unavailable",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
+        "errorCode": "MODEL_UNAVAILABLE",
+        "mode": "stopAndAsk",
+        "maxRetries": 0,
+        "repairNoteTemplate": "The model {{toolName}} wanted is offline. {{message}} Pick a different model or try again later."
+    },
+    {
         "recipeId": "extend_video.model_unavailable",
         "version": "1.0.0",
         "toolName": "extend_video",
@@ -1697,6 +1764,15 @@ const REPAIR_RECIPES = [
         "repairNoteTemplate": "{{toolName}} needs permission you have not granted yet. {{message}}"
     },
     {
+        "recipeId": "generate_speech.permission_required",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
+        "errorCode": "PERMISSION_REQUIRED",
+        "mode": "stopAndAsk",
+        "maxRetries": 0,
+        "repairNoteTemplate": "{{toolName}} needs permission you have not granted yet. {{message}}"
+    },
+    {
         "recipeId": "extend_video.permission_required",
         "version": "1.0.0",
         "toolName": "extend_video",
@@ -1860,6 +1936,16 @@ const REPAIR_RECIPES = [
         "suggestedFollowupTool": "generate_music"
     },
     {
+        "recipeId": "generate_speech.safety_rewrite",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
+        "errorCode": "SAFETY_REJECTED",
+        "mode": "suggestFollowup",
+        "maxRetries": 1,
+        "repairNoteTemplate": "Content filter rejected the prompt for {{toolName}}. Try a softer phrasing or different scene.",
+        "suggestedFollowupTool": "generate_speech"
+    },
+    {
         "recipeId": "generate_image.provider_timeout",
         "version": "1.0.0",
         "toolName": "generate_image",
@@ -1962,6 +2048,15 @@ const REPAIR_RECIPES = [
         "recipeId": "generate_music.provider_timeout",
         "version": "1.0.0",
         "toolName": "generate_music",
+        "errorCode": "PROVIDER_TIMEOUT",
+        "mode": "stopAndAsk",
+        "maxRetries": 0,
+        "repairNoteTemplate": "{{toolName}} timed out. {{message}} Want me to retry, or simplify the request?"
+    },
+    {
+        "recipeId": "generate_speech.provider_timeout",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
         "errorCode": "PROVIDER_TIMEOUT",
         "mode": "stopAndAsk",
         "maxRetries": 0,
@@ -2133,6 +2228,15 @@ const REPAIR_RECIPES = [
         "recipeId": "generate_music.user_cancelled",
         "version": "1.0.0",
         "toolName": "generate_music",
+        "errorCode": "USER_CANCELLED",
+        "mode": "stopAndAsk",
+        "maxRetries": 0,
+        "repairNoteTemplate": "The {{toolName}} run was cancelled by the user. I will stop here unless you ask me to try again."
+    },
+    {
+        "recipeId": "generate_speech.user_cancelled",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
         "errorCode": "USER_CANCELLED",
         "mode": "stopAndAsk",
         "maxRetries": 0,
@@ -2413,6 +2517,18 @@ const PROMPT_CONTRACTS = [
         "toolName": "generate_music",
         "baseDescription": "generate_music creates music tracks with optional lyrics, BPM, key, and style control.\n\nMUSIC CREATIVE BRIEF: Identify purpose before composing: full song, short social hook,\njingle, trailer score, background underscore, sonic logo, music video cue, or lyric video.\nDefine genre, mood, tempo/BPM, energy curve, instrumentation, vocal style, lyrical point of\nview, hook phrase, section structure, and production notes. Lyrics should be original,\nsingable, sectioned, rhythmically clear, and have a memorable hook. Brand music should make\nthe brand easier to remember without stuffing the name into every line.\n\nFor music visualization (syncing the generated track to video), chain generate_music →\nsound_to_video. Do NOT use animate_photo or generate_video for audio-driven visualization.\n\nAfter generate_music, if the user asks to \"turn that song into a video\" or similar, call\nsound_to_video next — it auto-detects the latest generated music track.",
         "parameterDocs": {}
+    },
+    {
+        "contractId": "generate_speech_v1",
+        "version": "1.0.0",
+        "toolName": "generate_speech",
+        "baseDescription": "generate_speech reads written words aloud. It is text-to-speech, not music: use\ngenerate_music for songs, instrumentals and jingles.\n\nTHE PROMPT IS THE SCRIPT. Unlike every image and video tool, prompt is not a description\nof the output — it is the literal text to be spoken, character for character. Writing \"a\ncalm woman reading the news\" produces a voice saying those seven words. Put the delivery in\nvoiceDescription and the actual copy in prompt.\n\nWRITE THE SCRIPT WHEN THE USER DOES NOT. \"Read me a haiku about rain\", \"record a podcast\nintro\" and \"say something reassuring\" are requests for words you compose and then speak.\nCompose the line and pass it as prompt. Reach for compose_script only for a long or\nstructured piece; a sentence or two is yours to write.\n\nPICK THE MODEL FROM WHAT THE USER GAVE YOU. A voice clip uploaded with \"make it sound like\nme\" is model=\"clone\" with voiceSourceIndex pointing at that upload. A described speaker who\ndoes not exist (\"an old lighthouse keeper\") is model=\"design\" with voiceDescription. Anything\nelse is model=\"voice\" — choose a voice from the roster and, if the user described a mood or\na delivery, put that in voiceDescription too.\n\nCLONING QUALITY. Set voiceTranscript whenever the words in the uploaded clip are known: it\nis the difference between a close clone and a loose one. Tell the user if their reference is\nshorter than three seconds, has music under it, or has two people talking — those are the\nthree reasons a clone comes back sounding wrong.\n\nPUNCTUATION IS PROSODY. Keep full stops, commas and question marks; they are the only pause\nand intonation control there is. Spell out numbers, dates and abbreviations the way they\nshould be read when the written form is ambiguous.\n\nTo put speech over video, generate it here and then call sound_to_video with the result.\nDo not use animate_photo or generate_video to \"say\" a line of provided text.",
+        "parameterDocs": {
+            "prompt": "The literal words to speak, verbatim. Not a description of the audio.",
+            "voiceDescription": "Delivery direction for model=\"voice\"; the speaker to invent for model=\"design\". Never sent with model=\"clone\".",
+            "voiceSourceIndex": "Index of the uploaded voice clip to clone (0-based, same numbering as other tools use for audio). Required for model=\"clone\".",
+            "voiceTranscript": "What the uploaded clip says. Optional, but it makes the clone markedly closer to the source."
+        }
     },
     {
         "contractId": "analyze_image_v1",
